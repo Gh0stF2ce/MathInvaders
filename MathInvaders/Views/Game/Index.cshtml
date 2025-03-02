@@ -1,0 +1,35 @@
+﻿@model MathInvaders.Models.GameState
+@{
+    ViewData["Title"] = "Math Invaders";
+}
+<h1>Захватчики</h1>
+<table border="1">
+    @for (int y = 0; y < Model.Grid.GetLength(1); y++)
+    {
+        <tr>
+            @for (int x = 0; x < Model.Grid.GetLength(0); x++)
+            {
+                var cell = Model.Grid[x, y];
+                <td style="width: 60px; height: 60px; text-align: center;">
+                    @if (cell.OwnerId.HasValue)
+                    {
+                        <span>Игрок @(cell.OwnerId)</span>
+                    }
+                    else
+                    {
+                        @cell.Task
+                    }
+                </td>
+            }
+        </tr>
+    }
+</table>
+<div>
+    <h3>Игроки:</h3>
+    <ul>
+        @foreach (var player in Model.Players)
+        {
+            <li>@player.Name: Монеты = @player.Coins, Клетки = @player.CapturedCells</li>
+        }
+    </ul>
+</div>
