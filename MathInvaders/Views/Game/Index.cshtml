@@ -3,6 +3,18 @@
     ViewData["Title"] = "Math Invaders";
 }
 <h1>Захватчики</h1>
+@if (Model.GameOver)
+{
+    <h2>@Model.Winner</h2>
+}
+else
+{
+    <h3>Текущий игрок: @Model.Players[Model.CurrentPlayerIndex].Name</h3>
+}
+@if (TempData["Message"] != null)
+{
+    <p style="color: red;">@TempData["Message"]</p>
+}
 <table border="1">
     @for (int y = 0; y < Model.Grid.GetLength(1); y++)
     {
@@ -18,6 +30,15 @@
                     else
                     {
                         @cell.Task
+                        @foreach (var player in Model.Players)
+                        {
+                            if (player.X == x && player.Y == y)
+                            {
+                                <br />
+
+                                <span style="color: red;">@(player.Name)</span>
+                            }
+                        }
                     }
                 </td>
             }
@@ -29,7 +50,31 @@
     <ul>
         @foreach (var player in Model.Players)
         {
-            <li>@player.Name: Монеты = @player.Coins, Клетки = @player.CapturedCells</li>
+            <li>@player.Name: Монеты = @player.Coins, Клетки = @player.CapturedCells (X: @player.X, Y: @player.Y)</li>
         }
     </ul>
 </div>
+
+@if (!Model.GameOver)
+{
+    <h3>Сделать ход</h3>
+    <form asp-action="Move" method="post">
+        <label>Игрок:</label>
+        <select name="playerId">
+            @foreach (var player in Model.Players)
+            {
+                <option value="@player.Id">@player.Name</option>
+            }
+        </select><br />
+        <label>Направление:</label>
+        <select name="direction">
+            <option value="up">Вверх</option>
+            <option value="down">Вниз</option>
+            <option value="left">Влево</option>
+            <option value="right">Вправо</option>
+        </select><br />
+        <label>Ответ на задачу:</label>
+        <input type="number" name="answer" required /><br />
+        <input type="submit" value="Ход" />
+    </form>
+}
