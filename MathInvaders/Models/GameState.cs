@@ -8,7 +8,8 @@
         public bool GameOver { get; set; } = false;
         public string Winner { get; set; }
         public bool ShowTaskInput { get; set; } = false;
-        public (int X, int Y)? LastMovedCell { get; set; } = null; // Последняя перемещённая клетка
+        public (int X, int Y)? LastMovedCell { get; set; } = null;
+        public int ActivePlayerId { get; set; } // ID активного игрока
 
         public bool CanMove(Player player, string direction)
         {

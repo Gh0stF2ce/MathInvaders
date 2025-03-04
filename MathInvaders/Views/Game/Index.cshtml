@@ -22,7 +22,9 @@
         {
             <p class="message">@TempData["Message"]</p>
         }
-        <table class="game-table">
+        <!-- Отладка: показываем ActivePlayerId -->
+        <p>Active Player ID (для отладки): @Model.ActivePlayerId</p>
+        <table class="game-table" id="gameField">
             @for (int y = 0; y < Model.Grid.GetLength(1); y++)
             {
                 <tr>
@@ -30,8 +32,10 @@
                     {
                         var cell = Model.Grid[x, y];
                         var isHighlighted = Model.LastMovedCell.HasValue && Model.LastMovedCell.Value.X == x && Model.LastMovedCell.Value.Y == y;
-                        var isCurrentPlayerCell = Model.Players[Model.CurrentPlayerIndex].X == x && Model.Players[Model.CurrentPlayerIndex].Y == y;
-                        <td class="@(isHighlighted ? "highlight" : "") @(isCurrentPlayerCell ? "current-player-cell" : "")">
+                        var currentPlayer = Model.Players.FirstOrDefault(p => p.Id == Model.ActivePlayerId);
+                        var isCurrentPlayerCell = currentPlayer != null && currentPlayer.X == x && currentPlayer.Y == y;
+                        var isAvailable = !isCurrentPlayerCell && currentPlayer != null && Math.Abs(currentPlayer.X - x) + Math.Abs(currentPlayer.Y - y) == 1;
+                        <td class="@(isHighlighted ? "highlight" : "") @(isCurrentPlayerCell ? "current-player-cell" : "") @(isAvailable ? "available" : "")" data-x="@x" data-y="@y">
                             @if (cell.OwnerId.HasValue)
                             {
                                 <span>Игрок @(cell.OwnerId)</span>
@@ -61,63 +65,170 @@
             <ul class="players-list">
                 @foreach (var player in Model.Players)
                 {
-                    var isCurrent = Model.CurrentPlayerIndex == Model.Players.IndexOf(player);
+                    var isCurrent = player.Id == Model.ActivePlayerId;
                     <li class="@(isCurrent ? "current-player" : "")">
                         @player.Name: Монеты = @player.Coins, Клетки = @player.CapturedCells (X: @player.X, Y: @player.Y)
                     </li>
                 }
             </ul>
         </div>
-
-        @if (!Model.GameOver)
-        {
-            @if (!Model.ShowTaskInput)
-            {
-                <h3>Сделать ход</h3>
-                <form asp-action="Move" method="post">
-                    <label>Игрок:</label>
-                    <select name="playerId">
-                        @foreach (var player in Model.Players)
-                        {
-                            <option value="@player.Id">@player.Name</option>
-                        }
-                    </select><br />
-                    <label>Направление:</label>
-                    <select name="direction">
-                        <option value="up">Вверх</option>
-                        <option value="down">Вниз</option>
-                        <option value="left">Влево</option>
-                        <option value="right">Вправо</option>
-                    </select><br />
-                    <input type="submit" value="Переместиться" />
-                </form>
-
-                <h3>Тратить монеты?</h3>
-                <form asp-action="SpendCoins" method="post">
-                    <input type="hidden" name="playerId" value="@Model.Players[Model.CurrentPlayerIndex].Id" />
-                    <label>
-                        <input type="radio" name="spend" value="true" /> Да (@Model.Grid[Model.Players[Model.CurrentPlayerIndex].X, Model.Players[Model.CurrentPlayerIndex].Y].Cost монет)
-                    </label><br />
-                    <label>
-                        <input type="radio" name="spend" value="false" checked /> Нет
-                    </label><br />
-                    <input type="submit" value="Подтвердить" />
-                </form>
-            }
-            else
-            {
-                <h3>Введите ответ</h3>
-                <form asp-action="SubmitAnswer" method="post">
-                    <input type="hidden" name="playerId" value="@Model.Players[Model.CurrentPlayerIndex].Id" />
-                    <label>Задача: @Model.Grid[Model.Players[Model.CurrentPlayerIndex].X, Model.Players[Model.CurrentPlayerIndex].Y].Task</label><br />
-                    <input type="number" name="answer" required /><br />
-                    <input type="submit" value="Ответить" />
-                </form>
-            }
-        }
         <form asp-action="Reset" method="post">
             <input type="submit" value="Новая игра" />
         </form>
     </div>
+
+    <!-- Модальное окно для траты монет -->
+    <div id="spendCoinsModal" class="modal">
+        <div class="modal-content">
+            <h3>Тратить монеты?</h3>
+            <p>Стоимость: <span id="coinCost"></span> монет</p>
+            <button id="spendYes">Да</button>
+            <button id="spendNo">Нет</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно для ввода ответа -->
+    <div id="answerModal" class="modal">
+        <div class="modal-content">
+            <h3>Введите ответ</h3>
+            <p>Задача: <span id="taskText"></span></p>
+            <input type="number" id="answerInput" required />
+            <button id="submitAnswer">Ответить</button>
+        </div>
+    </div>
+
+    <script>
+        const gameField = document.getElementById('gameField');
+        const spendCoinsModal = document.getElementById('spendCoinsModal');
+        const answerModal = document.getElementById('answerModal');
+        const spendYes = document.getElementById('spendYes');
+        const spendNo = document.getElementById('spendNo');
+        const coinCost = document.getElementById('coinCost');
+        const taskText = document.getElementById('taskText');
+        const answerInput = document.getElementById('answerInput');
+        const submitAnswer = document.getElementById('submitAnswer');
+        const currentPlayerId = @Model.ActivePlayerId;
+
+        console.log("Raw ActivePlayerId from Razor: '@Model.ActivePlayerId'");
+        console.log("Current Player ID (parsed):", currentPlayerId);
+
+        // Перемещение по клику
+        gameField.addEventListener('click', function(e) {
+            const td = e.target.closest('td');
+            if (!td || !td.classList.contains('available')) return;
+
+            const x = parseInt(td.getAttribute('data-x'));
+            const y = parseInt(td.getAttribute('data-y'));
+
+            console.log("Sending playerId:", currentPlayerId);
+
+            fetch('/Game/Move', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ playerId: currentPlayerId, direction: getDirection(x, y) })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('Ошибка сервера: ' + response.status);
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    coinCost.textContent = data.cost;
+                    spendCoinsModal.style.display = 'flex';
+                } else {
+                    alert(data.message || 'Нельзя туда пойти!');
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Произошла ошибка при перемещении: ' + error.message);
+            });
+        });
+
+        // Определяем направление
+        function getDirection(x, y) {
+            const currentX = @Model.Players.First(p => p.Id == Model.ActivePlayerId).X;
+            const currentY = @Model.Players.First(p => p.Id == Model.ActivePlayerId).Y;
+            if (x === currentX - 1 && y === currentY) return 'left';
+            if (x === currentX + 1 && y === currentY) return 'right';
+            if (y === currentY - 1 && x === currentX) return 'up';
+            if (y === currentY + 1 && x === currentX) return 'down';
+            return '';
+        }
+
+        // Обработка "Тратить монеты?"
+        spendYes.addEventListener('click', function() {
+            spendCoins(true);
+        });
+
+        spendNo.addEventListener('click', function() {
+            spendCoins(false);
+        });
+
+        function spendCoins(spend) {
+            fetch('/Game/SpendCoins', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ playerId: currentPlayerId, spend: spend })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('Ошибка сервера');
+                return response.json();
+            })
+            .then(data => {
+                spendCoinsModal.style.display = 'none';
+                if (data.success && spend) {
+                    taskText.textContent = data.task;
+                    answerModal.style.display = 'flex';
+                } else if (!data.success) {
+                    alert(data.message || 'Ошибка!');
+                    window.location.reload();
+                } else {
+                    window.location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Произошла ошибка при обработке монет!');
+                window.location.reload();
+            });
+        }
+
+        // Обработка ответа
+        submitAnswer.addEventListener('click', function() {
+            const answer = parseInt(answerInput.value);
+            if (isNaN(answer)) {
+                alert('Введите число!');
+                return;
+            }
+            fetch('/Game/SubmitAnswer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ playerId: currentPlayerId, answer: answer })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('Ошибка сервера');
+                return response.json();
+            })
+            .then(data => {
+                answerModal.style.display = 'none';
+                if (!data.success) {
+                    alert(data.message || 'Неверный ответ!');
+                }
+                window.location.reload();
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Произошла ошибка при отправке ответа!');
+                window.location.reload();
+            });
+        });
+    </script>
 </body>
 </html>

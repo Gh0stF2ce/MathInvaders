@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using MathInvaders.Models;
+using static MathInvaders.Models.GameRequest;
 
 namespace MathInvaders.Controllers
 {
@@ -14,32 +15,31 @@ namespace MathInvaders.Controllers
             {
                 InitializeGame(5);
             }
+            _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id; // Устанавливаем активного игрока
             return View(_gameState);
         }
 
         [HttpPost]
-        public IActionResult Move(int playerId, string direction)
+        public IActionResult Move([FromBody] GameMoveRequest request)
         {
             if (_gameState.GameOver || _gameState.ShowTaskInput)
             {
-                return RedirectToAction("Index");
+                return Json(new { success = false, message = "Игра окончена или сейчас не время ходить!" });
             }
 
             var currentPlayer = _gameState.Players[_gameState.CurrentPlayerIndex];
-            if (currentPlayer.Id != playerId)
+            if (currentPlayer.Id != request.PlayerId)
             {
-                TempData["Message"] = "Сейчас не ваш ход!";
-                return RedirectToAction("Index");
+                return Json(new { success = false, message = "Сейчас не ваш ход!" });
             }
 
-            if (!_gameState.CanMove(currentPlayer, direction))
+            if (!_gameState.CanMove(currentPlayer, request.Direction))
             {
-                TempData["Message"] = "Нельзя туда пойти!";
-                return RedirectToAction("Index");
+                return Json(new { success = false, message = "Нельзя туда пойти!" });
             }
 
             int oldX = currentPlayer.X, oldY = currentPlayer.Y;
-            switch (direction.ToLower())
+            switch (request.Direction.ToLower())
             {
                 case "up": currentPlayer.Y--; break;
                 case "down": currentPlayer.Y++; break;
@@ -47,33 +47,31 @@ namespace MathInvaders.Controllers
                 case "right": currentPlayer.X++; break;
             }
             _gameState.LastMovedCell = (currentPlayer.X, currentPlayer.Y);
-
-            return RedirectToAction("Index");
+            var cell = _gameState.Grid[currentPlayer.X, currentPlayer.Y];
+            return Json(new { success = true, cost = cell.Cost });
         }
 
         [HttpPost]
-        public IActionResult SpendCoins(int playerId, bool spend)
+        public IActionResult SpendCoins([FromBody] GameSpendRequest request)
         {
             if (_gameState.GameOver || _gameState.ShowTaskInput)
             {
-                return RedirectToAction("Index");
+                return Json(new { success = false, message = "Игра окончена или сейчас не время!" });
             }
 
             var currentPlayer = _gameState.Players[_gameState.CurrentPlayerIndex];
-            if (currentPlayer.Id != playerId)
+            if (currentPlayer.Id != request.PlayerId)
             {
-                TempData["Message"] = "Сейчас не ваш ход!";
-                return RedirectToAction("Index");
+                return Json(new { success = false, message = "Сейчас не ваш ход!" });
             }
 
             var cell = _gameState.Grid[currentPlayer.X, currentPlayer.Y];
             if (cell.OwnerId.HasValue)
             {
-                TempData["Message"] = "Эта клетка уже принадлежит игроку!";
-                return RedirectToAction("Index");
+                return Json(new { success = false, message = "Эта клетка уже принадлежит игроку!" });
             }
 
-            if (spend)
+            if (request.Spend)
             {
                 if (currentPlayer.Coins >= cell.Cost)
                 {
@@ -81,38 +79,38 @@ namespace MathInvaders.Controllers
                     cell.IsRevealed = true;
                     _gameState.ShowTaskInput = true;
                     _gameState.LastMovedCell = null;
+                    return Json(new { success = true, task = cell.Task });
                 }
                 else
                 {
-                    TempData["Message"] = "Недостаточно монет!";
+                    return Json(new { success = false, message = "Недостаточно монет!" });
                 }
             }
             else
             {
+                _gameState.ShowTaskInput = false;
                 _gameState.CurrentPlayerIndex = (_gameState.CurrentPlayerIndex + 1) % _gameState.Players.Count;
-                _gameState.LastMovedCell = null;
+                _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
+                return Json(new { success = true });
             }
-
-            return RedirectToAction("Index");
         }
 
         [HttpPost]
-        public IActionResult SubmitAnswer(int playerId, int answer)
+        public IActionResult SubmitAnswer([FromBody] GameAnswerRequest request)
         {
             if (_gameState.GameOver || !_gameState.ShowTaskInput)
             {
-                return RedirectToAction("Index");
+                return Json(new { success = false, message = "Игра окончена или сейчас не время!" });
             }
 
             var currentPlayer = _gameState.Players[_gameState.CurrentPlayerIndex];
-            if (currentPlayer.Id != playerId)
+            if (currentPlayer.Id != request.PlayerId)
             {
-                TempData["Message"] = "Сейчас не ваш ход!";
-                return RedirectToAction("Index");
+                return Json(new { success = false, message = "Сейчас не ваш ход!" });
             }
 
             var cell = _gameState.Grid[currentPlayer.X, currentPlayer.Y];
-            if (answer == cell.Answer)
+            if (request.Answer == cell.Answer)
             {
                 cell.OwnerId = currentPlayer.Id;
                 currentPlayer.CapturedCells++;
@@ -120,14 +118,15 @@ namespace MathInvaders.Controllers
             }
             else
             {
-                TempData["Message"] = "Неверный ответ!";
+                return Json(new { success = false, message = "Неверный ответ!" });
             }
 
             _gameState.ShowTaskInput = false;
             _gameState.CurrentPlayerIndex = (_gameState.CurrentPlayerIndex + 1) % _gameState.Players.Count;
+            _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
             _gameState.CheckGameOver();
 
-            return RedirectToAction("Index");
+            return Json(new { success = true });
         }
 
         [HttpPost]
@@ -176,6 +175,7 @@ namespace MathInvaders.Controllers
             }
 
             _gameState.CurrentPlayerIndex = 0;
+            _gameState.ActivePlayerId = _gameState.Players[0].Id; // Начинаем с "Player1"
             _gameState.GameOver = false;
             _gameState.Winner = null;
             _gameState.ShowTaskInput = false;
