@@ -130,6 +130,14 @@ namespace MathInvaders.Controllers
             return RedirectToAction("Index");
         }
 
+        [HttpPost]
+        public IActionResult Reset()
+        {
+            _gameState = new GameState();
+            InitializeGame(5);
+            return RedirectToAction("Index");
+        }
+
         private void InitializeGame(int size)
         {
             var players = new List<Player>

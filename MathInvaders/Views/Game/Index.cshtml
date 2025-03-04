@@ -30,7 +30,8 @@
                     {
                         var cell = Model.Grid[x, y];
                         var isHighlighted = Model.LastMovedCell.HasValue && Model.LastMovedCell.Value.X == x && Model.LastMovedCell.Value.Y == y;
-                        <td class="@(isHighlighted ? "highlight" : "")">
+                        var isCurrentPlayerCell = Model.Players[Model.CurrentPlayerIndex].X == x && Model.Players[Model.CurrentPlayerIndex].Y == y;
+                        <td class="@(isHighlighted ? "highlight" : "") @(isCurrentPlayerCell ? "current-player-cell" : "")">
                             @if (cell.OwnerId.HasValue)
                             {
                                 <span>Игрок @(cell.OwnerId)</span>
@@ -60,7 +61,10 @@
             <ul class="players-list">
                 @foreach (var player in Model.Players)
                 {
-                    <li>@player.Name: Монеты = @player.Coins, Клетки = @player.CapturedCells (X: @player.X, Y: @player.Y)</li>
+                    var isCurrent = Model.CurrentPlayerIndex == Model.Players.IndexOf(player);
+                    <li class="@(isCurrent ? "current-player" : "")">
+                        @player.Name: Монеты = @player.Coins, Клетки = @player.CapturedCells (X: @player.X, Y: @player.Y)
+                    </li>
                 }
             </ul>
         </div>
@@ -111,6 +115,9 @@
                 </form>
             }
         }
+        <form asp-action="Reset" method="post">
+            <input type="submit" value="Новая игра" />
+        </form>
     </div>
 </body>
 </html>

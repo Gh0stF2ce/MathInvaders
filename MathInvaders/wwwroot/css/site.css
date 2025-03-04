@@ -1,7 +1,10 @@
+/* Подключаем Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
 /* Общий стиль */
 body {
-    font-family: 'Arial', sans-serif;
-    background-color: #1a1a2e;
+    font-family: 'Roboto', sans-serif;
+    background-color: #1a1a2e; /* Простой тёмный фон */
     color: #e0e0e0;
     margin: 0;
     padding: 20px;
@@ -48,6 +51,11 @@ h1, h2, h3 {
         background-color: #ff6f61;
     }
 
+    .game-table .current-player-cell {
+        border: 3px solid #00ffcc;
+        box-shadow: 0 0 10px #00ffcc;
+    }
+
     .game-table span {
         display: block;
         font-size: 14px;
@@ -62,6 +70,7 @@ h1, h2, h3 {
 form {
     margin: 20px 0;
     text-align: center;
+    animation: slideIn 0.5s ease-in;
 }
 
 label {
@@ -107,6 +116,12 @@ input[type="radio"] {
     .players-list li {
         margin: 10px 0;
         color: #a8d8ea;
+        transition: color 0.3s;
+    }
+
+    .players-list .current-player {
+        color: #00ffcc;
+        font-weight: bold;
     }
 
 /* Сообщения */
@@ -138,5 +153,17 @@ input[type="radio"] {
     100% {
         background-color: #0f3460;
         transform: scale(1);
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
