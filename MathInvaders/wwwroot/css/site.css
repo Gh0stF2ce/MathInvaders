@@ -1,22 +1,142 @@
-html {
-  font-size: 14px;
-}
-
-@media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
-}
-
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
-}
-
-html {
-  position: relative;
-  min-height: 100%;
-}
-
+/* Общий стиль */
 body {
-  margin-bottom: 60px;
+    font-family: 'Arial', sans-serif;
+    background-color: #1a1a2e;
+    color: #e0e0e0;
+    margin: 0;
+    padding: 20px;
+}
+
+h1, h2, h3 {
+    color: #ff6f61;
+    text-align: center;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: #16213e;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Таблица поля */
+.game-table {
+    border-collapse: collapse;
+    margin: 20px auto;
+    animation: fadeIn 1s ease-in;
+}
+
+    .game-table td {
+        width: 80px;
+        height: 80px;
+        text-align: center;
+        background-color: #0f3460;
+        border: 2px solid #e94560;
+        border-radius: 5px;
+        transition: transform 0.2s, background-color 0.3s;
+    }
+
+        .game-table td:hover {
+            background-color: #1b4f72;
+            transform: scale(1.05);
+        }
+
+    .game-table .highlight {
+        animation: highlight 0.5s ease-out;
+        background-color: #ff6f61;
+    }
+
+    .game-table span {
+        display: block;
+        font-size: 14px;
+    }
+
+    .game-table .player {
+        color: #ff6f61;
+        font-weight: bold;
+    }
+
+/* Формы */
+form {
+    margin: 20px 0;
+    text-align: center;
+}
+
+label {
+    margin-right: 10px;
+    color: #e0e0e0;
+}
+
+select, input[type="number"] {
+    padding: 8px;
+    border: 1px solid #e94560;
+    border-radius: 5px;
+    background-color: #0f3460;
+    color: #e0e0e0;
+    margin: 5px;
+}
+
+input[type="submit"] {
+    padding: 10px 20px;
+    background-color: #e94560;
+    border: none;
+    border-radius: 5px;
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+    input[type="submit"]:hover {
+        transform: scale(1.1);
+        background-color: #ff6f61;
+    }
+
+input[type="radio"] {
+    margin: 0 5px;
+}
+
+/* Список игроков */
+.players-list {
+    list-style: none;
+    padding: 0;
+    text-align: center;
+}
+
+    .players-list li {
+        margin: 10px 0;
+        color: #a8d8ea;
+    }
+
+/* Сообщения */
+.message {
+    color: #ff6f61;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* Анимации */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes highlight {
+    0% {
+        background-color: #ff6f61;
+        transform: scale(1.1);
+    }
+
+    100% {
+        background-color: #0f3460;
+        transform: scale(1);
+    }
 }

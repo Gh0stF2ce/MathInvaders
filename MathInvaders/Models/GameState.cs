@@ -4,9 +4,10 @@
     {
         public List<Player> Players { get; set; } = new List<Player>();
         public Cell[,] Grid { get; set; }
-        public int CurrentPlayerIndex { get; set; } = 0; // Индекс текущего игрока
+        public int CurrentPlayerIndex { get; set; } = 0;
         public bool GameOver { get; set; } = false;
         public string Winner { get; set; }
+        public bool ShowTaskInput { get; set; } = false; // Показывать ли поле ввода ответа
 
         public bool CanMove(Player player, string direction)
         {
@@ -19,16 +20,13 @@
                 case "right": newX++; break;
                 default: return false;
             }
-            // Проверка границ поля
             if (newX < 0 || newX >= Grid.GetLength(0) || newY < 0 || newY >= Grid.GetLength(1))
                 return false;
-            // Проверка, не занят ли клетка другим игроком
             return !Players.Any(p => p.X == newX && p.Y == newY && p.Id != player.Id);
         }
 
         public void CheckGameOver()
         {
-            // Игра заканчивается, если у всех игроков закончились монеты или все клетки захвачены
             bool allCoinsSpent = Players.All(p => p.Coins == 0);
             bool allCellsCaptured = true;
             for (int x = 0; x < Grid.GetLength(0); x++)

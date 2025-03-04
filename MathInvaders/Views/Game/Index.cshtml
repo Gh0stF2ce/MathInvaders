@@ -2,79 +2,115 @@
 @{
     ViewData["Title"] = "Math Invaders";
 }
-<h1>Захватчики</h1>
-@if (Model.GameOver)
-{
-    <h2>@Model.Winner</h2>
-}
-else
-{
-    <h3>Текущий игрок: @Model.Players[Model.CurrentPlayerIndex].Name</h3>
-}
-@if (TempData["Message"] != null)
-{
-    <p style="color: red;">@TempData["Message"]</p>
-}
-<table border="1">
-    @for (int y = 0; y < Model.Grid.GetLength(1); y++)
-    {
-        <tr>
-            @for (int x = 0; x < Model.Grid.GetLength(0); x++)
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+    <div class="container">
+        <h1>Захватчики</h1>
+        @if (Model.GameOver)
+        {
+            <h2>@Model.Winner</h2>
+        }
+        else
+        {
+            <h3>Текущий игрок: @Model.Players[Model.CurrentPlayerIndex].Name</h3>
+        }
+        @if (TempData["Message"] != null)
+        {
+            <p class="message">@TempData["Message"]</p>
+        }
+        <table class="game-table">
+            @for (int y = 0; y < Model.Grid.GetLength(1); y++)
             {
-                var cell = Model.Grid[x, y];
-                <td style="width: 60px; height: 60px; text-align: center;">
-                    @if (cell.OwnerId.HasValue)
+                <tr>
+                    @for (int x = 0; x < Model.Grid.GetLength(0); x++)
                     {
-                        <span>Игрок @(cell.OwnerId)</span>
+                        var cell = Model.Grid[x, y];
+                        var isHighlighted = ViewBag.LastMovedCell != null && ViewBag.LastMovedCell.X == x && ViewBag.LastMovedCell.Y == y;
+                        <td class="@(isHighlighted ? "highlight" : "")">
+                            @if (cell.OwnerId.HasValue)
+                            {
+                                <span>Игрок @(cell.OwnerId)</span>
+                            }
+                            else if (!cell.IsRevealed)
+                            {
+                                <span>Сложность: @cell.Difficulty<br />Стоимость: @cell.Cost</span>
+                            }
+                            else
+                            {
+                                <span>@cell.Task</span>
+                            }
+                            @foreach (var player in Model.Players)
+                            {
+                                if (player.X == x && player.Y == y)
+                                {
+                                    <span class="player">@player.Name</span>
+                                }
+                            }
+                        </td>
                     }
-                    else
-                    {
-                        @cell.Task
+                </tr>
+            }
+        </table>
+        <div>
+            <h3>Игроки:</h3>
+            <ul class="players-list">
+                @foreach (var player in Model.Players)
+                {
+                    <li>@player.Name: Монеты = @player.Coins, Клетки = @player.CapturedCells (X: @player.X, Y: @player.Y)</li>
+                }
+            </ul>
+        </div>
+
+        @if (!Model.GameOver)
+        {
+            @if (!Model.ShowTaskInput)
+            {
+                <h3>Сделать ход</h3>
+                <form asp-action="Move" method="post">
+                    <label>Игрок:</label>
+                    <select name="playerId">
                         @foreach (var player in Model.Players)
                         {
-                            if (player.X == x && player.Y == y)
-                            {
-                                <br />
-
-                                <span style="color: red;">@(player.Name)</span>
-                            }
+                            <option value="@player.Id">@player.Name</option>
                         }
-                    }
-                </td>
-            }
-        </tr>
-    }
-</table>
-<div>
-    <h3>Игроки:</h3>
-    <ul>
-        @foreach (var player in Model.Players)
-        {
-            <li>@player.Name: Монеты = @player.Coins, Клетки = @player.CapturedCells (X: @player.X, Y: @player.Y)</li>
-        }
-    </ul>
-</div>
+                    </select><br />
+                    <label>Направление:</label>
+                    <select name="direction">
+                        <option value="up">Вверх</option>
+                        <option value="down">Вниз</option>
+                        <option value="left">Влево</option>
+                        <option value="right">Вправо</option>
+                    </select><br />
+                    <input type="submit" value="Переместиться" />
+                </form>
 
-@if (!Model.GameOver)
-{
-    <h3>Сделать ход</h3>
-    <form asp-action="Move" method="post">
-        <label>Игрок:</label>
-        <select name="playerId">
-            @foreach (var player in Model.Players)
-            {
-                <option value="@player.Id">@player.Name</option>
+                <h3>Тратить монеты?</h3>
+                <form asp-action="SpendCoins" method="post">
+                    <input type="hidden" name="playerId" value="@Model.Players[Model.CurrentPlayerIndex].Id" />
+                    <label>
+                        <input type="radio" name="spend" value="true" /> Да (@Model.Grid[Model.Players[Model.CurrentPlayerIndex].X, Model.Players[Model.CurrentPlayerIndex].Y].Cost монет)
+                    </label><br />
+                    <label>
+                        <input type="radio" name="spend" value="false" checked /> Нет
+                    </label><br />
+                    <input type="submit" value="Подтвердить" />
+                </form>
             }
-        </select><br />
-        <label>Направление:</label>
-        <select name="direction">
-            <option value="up">Вверх</option>
-            <option value="down">Вниз</option>
-            <option value="left">Влево</option>
-            <option value="right">Вправо</option>
-        </select><br />
-        <label>Ответ на задачу:</label>
-        <input type="number" name="answer" required /><br />
-        <input type="submit" value="Ход" />
-    </form>
-}
+            else
+            {
+                <h3>Введите ответ</h3>
+                <form asp-action="SubmitAnswer" method="post">
+                    <input type="hidden" name="playerId" value="@Model.Players[Model.CurrentPlayerIndex].Id" />
+                    <label>Задача: @Model.Grid[Model.Players[Model.CurrentPlayerIndex].X, Model.Players[Model.CurrentPlayerIndex].Y].Task</label><br />
+                    <input type="number" name="answer" required /><br />
+                    <input type="submit" value="Ответить" />
+                </form>
+            }
+        }
+    </div>
+</body>
+</html>
