@@ -29,7 +29,7 @@
                     @for (int x = 0; x < Model.Grid.GetLength(0); x++)
                     {
                         var cell = Model.Grid[x, y];
-                        var isHighlighted = ViewBag.LastMovedCell != null && ViewBag.LastMovedCell.X == x && ViewBag.LastMovedCell.Y == y;
+                        var isHighlighted = Model.LastMovedCell.HasValue && Model.LastMovedCell.Value.X == x && Model.LastMovedCell.Value.Y == y;
                         <td class="@(isHighlighted ? "highlight" : "")">
                             @if (cell.OwnerId.HasValue)
                             {

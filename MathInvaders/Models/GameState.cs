@@ -7,7 +7,8 @@
         public int CurrentPlayerIndex { get; set; } = 0;
         public bool GameOver { get; set; } = false;
         public string Winner { get; set; }
-        public bool ShowTaskInput { get; set; } = false; // Показывать ли поле ввода ответа
+        public bool ShowTaskInput { get; set; } = false;
+        public (int X, int Y)? LastMovedCell { get; set; } = null; // Последняя перемещённая клетка
 
         public bool CanMove(Player player, string direction)
         {
