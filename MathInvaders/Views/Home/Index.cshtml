@@ -1,8 +1,44 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Math Invaders - Главная";
 }
-
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-</div>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Math Invaders</title>
+    <link rel="stylesheet" href="~/css/site.css" />
+    <style>
+        .home-container {
+            text-align: center;
+            margin-top: 100px;
+            font-family: Arial, sans-serif;
+        }
+        .title {
+            font-size: 48px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .play-button {
+            padding: 15px 30px;
+            font-size: 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .play-button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="home-container">
+        <h1 class="title">Math Invaders</h1>
+        <p>Добро пожаловать в математическую игру на захват территорий!</p>
+        <form asp-controller="Game" asp-action="Index" method="get">
+            <button type="submit" class="play-button">Играть</button>
+        </form>
+    </div>
+</body>
+</html>

@@ -87,11 +87,12 @@
         </div>
     </div>
 
-    <!-- Модальное окно для ввода ответа -->
+    <!-- Модальное окно для ввода ответа с таймером -->
     <div id="answerModal" class="modal">
         <div class="modal-content">
             <h3>Введите ответ</h3>
             <p>Задача: <span id="taskText"></span></p>
+            <p>Осталось времени: <span id="timer">30</span> сек</p>
             <input type="number" id="answerInput" required />
             <button id="submitAnswer">Ответить</button>
         </div>
@@ -107,7 +108,10 @@
         const taskText = document.getElementById('taskText');
         const answerInput = document.getElementById('answerInput');
         const submitAnswer = document.getElementById('submitAnswer');
+        const timerDisplay = document.getElementById('timer');
         const currentPlayerId = @Model.ActivePlayerId;
+        let timeLeft = 30;
+        let timerInterval = null;
 
         console.log("Raw ActivePlayerId from Razor: '@Model.ActivePlayerId'");
         console.log("Current Player ID (parsed):", currentPlayerId);
@@ -183,7 +187,10 @@
                 spendCoinsModal.style.display = 'none';
                 if (data.success && spend) {
                     taskText.textContent = data.task;
+                    timeLeft = data.timeLimit; // Устанавливаем время с сервера (30 сек)
+                    timerDisplay.textContent = timeLeft;
                     answerModal.style.display = 'flex';
+                    startTimer(); // Запускаем таймер
                 } else if (!data.success) {
                     alert(data.message || 'Ошибка!');
                     window.location.reload();
@@ -205,6 +212,7 @@
                 alert('Введите число!');
                 return;
             }
+            clearInterval(timerInterval); // Останавливаем таймер
             fetch('/Game/SubmitAnswer', {
                 method: 'POST',
                 headers: {
@@ -229,6 +237,40 @@
                 window.location.reload();
             });
         });
+
+        // Логика таймера
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    answerModal.style.display = 'none';
+                    fetch('/Game/Timeout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ playerId: currentPlayerId })
+                    })
+                    .then(response => {
+                        if (!response.ok) throw new Error('Ошибка сервера');
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            alert(data.message || 'Время вышло!');
+                            window.location.reload();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Ошибка:', error);
+                        alert('Ошибка при обработке таймаута: ' + error.message);
+                        window.location.reload();
+                    });
+                }
+            }, 1000); // Обновляем каждую секунду
+        }
     </script>
 </body>
 </html>

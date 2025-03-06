@@ -10,6 +10,7 @@
         public bool ShowTaskInput { get; set; } = false;
         public (int X, int Y)? LastMovedCell { get; set; } = null;
         public int ActivePlayerId { get; set; } // ID активного игрока
+        public bool TimerActive { get; set; } = false;
 
         public bool CanMove(Player player, string direction)
         {

@@ -78,8 +78,9 @@ namespace MathInvaders.Controllers
                     currentPlayer.Coins -= cell.Cost;
                     cell.IsRevealed = true;
                     _gameState.ShowTaskInput = true;
+                    _gameState.TimerActive = true; // Активируем таймер
                     _gameState.LastMovedCell = null;
-                    return Json(new { success = true, task = cell.Task });
+                    return Json(new { success = true, task = cell.Task, timeLimit = 30 }); // Отправляем лимит времени в секундах
                 }
                 else
                 {
@@ -89,10 +90,31 @@ namespace MathInvaders.Controllers
             else
             {
                 _gameState.ShowTaskInput = false;
+                _gameState.TimerActive = false;
                 _gameState.CurrentPlayerIndex = (_gameState.CurrentPlayerIndex + 1) % _gameState.Players.Count;
                 _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
                 return Json(new { success = true });
             }
+        }
+        [HttpPost]
+        public IActionResult Timeout([FromBody] GameSpendRequest request)
+        {
+            if (_gameState.GameOver || !_gameState.ShowTaskInput || !_gameState.TimerActive)
+            {
+                return Json(new { success = false, message = "Таймер не активен!" });
+            }
+
+            var currentPlayer = _gameState.Players[_gameState.CurrentPlayerIndex];
+            if (currentPlayer.Id != request.PlayerId)
+            {
+                return Json(new { success = false, message = "Сейчас не ваш ход!" });
+            }
+
+            _gameState.ShowTaskInput = false;
+            _gameState.TimerActive = false;
+            _gameState.CurrentPlayerIndex = (_gameState.CurrentPlayerIndex + 1) % _gameState.Players.Count;
+            _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
+            return Json(new { success = true, message = "Время вышло!" });
         }
 
         [HttpPost]
@@ -154,18 +176,20 @@ namespace MathInvaders.Controllers
                 for (int y = 0; y < size; y++)
                 {
                     int difficulty = _random.Next(1, 4);
+                    var (task, answer) = GenerateTask(difficulty);
                     _gameState.Grid[x, y] = new Cell
                     {
                         X = x,
                         Y = y,
-                        Task = $"{x} + {y} = ?",
-                        Answer = x + y,
+                        Task = task,
+                        Answer = answer,
                         Difficulty = difficulty,
                         Cost = difficulty
                     };
                 }
             }
 
+            // Остальной код остаётся без изменений
             foreach (var player in _gameState.Players)
             {
                 var startCell = _gameState.Grid[player.X, player.Y];
@@ -175,11 +199,26 @@ namespace MathInvaders.Controllers
             }
 
             _gameState.CurrentPlayerIndex = 0;
-            _gameState.ActivePlayerId = _gameState.Players[0].Id; // Начинаем с "Player1"
+            _gameState.ActivePlayerId = _gameState.Players[0].Id;
             _gameState.GameOver = false;
             _gameState.Winner = null;
             _gameState.ShowTaskInput = false;
             _gameState.LastMovedCell = null;
+        }
+        private (string task, int answer) GenerateTask(int difficulty)
+        {
+            int a = _random.Next(1, 10 * difficulty);
+            int b = _random.Next(1, 10 * difficulty);
+            switch (_random.Next(0, 4)) // Случайный оператор
+            {
+                case 0: return ($"{a} + {b} = ?", a + b); // Сложение
+                case 1: return ($"{a} - {b} = ?", a - b); // Вычитание
+                case 2: return ($"{a} * {b} = ?", a * b); // Умножение
+                case 3:
+                    int product = a * b; // Деление, чтобы ответ был целым
+                    return ($"{product} / {b} = ?", a);
+                default: return ($"{a} + {b} = ?", a + b); // На всякий случай
+            }
         }
     }
 }
