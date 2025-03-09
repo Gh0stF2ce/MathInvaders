@@ -22,7 +22,6 @@
         {
             <p class="message">@TempData["Message"]</p>
         }
-        <!-- Отладка: показываем ActivePlayerId -->
         <p>Active Player ID (для отладки): @Model.ActivePlayerId</p>
         <table class="game-table" id="gameField">
             @for (int y = 0; y < Model.Grid.GetLength(1); y++)
@@ -87,7 +86,19 @@
         </div>
     </div>
 
-    <!-- Модальное окно для ввода ответа с таймером -->
+    <!-- Модальное окно для захвата чужой клетки -->
+    <div id="captureModal" class="modal">
+        <div class="modal-content">
+            <h3>Захватить клетку?</h3>
+            <p>Вариант 1: Решить ту же задачу за <span id="doubleCost"></span> монет</p>
+            <p>Вариант 2: Решить более сложную задачу за <span id="originalCost"></span> монет</p>
+            <button id="captureOriginal">Вариант 1</button>
+            <button id="captureNew">Вариант 2</button>
+            <button id="captureCancel">Отмена</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно для ввода ответа -->
     <div id="answerModal" class="modal">
         <div class="modal-content">
             <h3>Введите ответ</h3>
@@ -101,10 +112,16 @@
     <script>
         const gameField = document.getElementById('gameField');
         const spendCoinsModal = document.getElementById('spendCoinsModal');
+        const captureModal = document.getElementById('captureModal');
         const answerModal = document.getElementById('answerModal');
         const spendYes = document.getElementById('spendYes');
         const spendNo = document.getElementById('spendNo');
         const coinCost = document.getElementById('coinCost');
+        const doubleCost = document.getElementById('doubleCost');
+        const originalCost = document.getElementById('originalCost');
+        const captureOriginal = document.getElementById('captureOriginal');
+        const captureNew = document.getElementById('captureNew');
+        const captureCancel = document.getElementById('captureCancel');
         const taskText = document.getElementById('taskText');
         const answerInput = document.getElementById('answerInput');
         const submitAnswer = document.getElementById('submitAnswer');
@@ -113,10 +130,6 @@
         let timeLeft = 30;
         let timerInterval = null;
 
-        console.log("Raw ActivePlayerId from Razor: '@Model.ActivePlayerId'");
-        console.log("Current Player ID (parsed):", currentPlayerId);
-
-        // Перемещение по клику
         gameField.addEventListener('click', function(e) {
             const td = e.target.closest('td');
             if (!td || !td.classList.contains('available')) return;
@@ -124,34 +137,29 @@
             const x = parseInt(td.getAttribute('data-x'));
             const y = parseInt(td.getAttribute('data-y'));
 
-            console.log("Sending playerId:", currentPlayerId);
-
             fetch('/Game/Move', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ playerId: currentPlayerId, direction: getDirection(x, y) })
             })
-            .then(response => {
-                if (!response.ok) throw new Error('Ошибка сервера: ' + response.status);
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    coinCost.textContent = data.cost;
-                    spendCoinsModal.style.display = 'flex';
+                    if (data.isOccupied) {
+                        doubleCost.textContent = data.doubleCost;
+                        originalCost.textContent = data.originalCost;
+                        captureModal.style.display = 'flex';
+                    } else {
+                        coinCost.textContent = data.cost;
+                        spendCoinsModal.style.display = 'flex';
+                    }
                 } else {
                     alert(data.message || 'Нельзя туда пойти!');
                 }
             })
-            .catch(error => {
-                console.error('Ошибка:', error);
-                alert('Произошла ошибка при перемещении: ' + error.message);
-            });
+            .catch(error => alert('Произошла ошибка при перемещении: ' + error.message));
         });
 
-        // Определяем направление
         function getDirection(x, y) {
             const currentX = @Model.Players.First(p => p.Id == Model.ActivePlayerId).X;
             const currentY = @Model.Players.First(p => p.Id == Model.ActivePlayerId).Y;
@@ -162,35 +170,24 @@
             return '';
         }
 
-        // Обработка "Тратить монеты?"
-        spendYes.addEventListener('click', function() {
-            spendCoins(true);
-        });
-
-        spendNo.addEventListener('click', function() {
-            spendCoins(false);
-        });
+        spendYes.addEventListener('click', function() { spendCoins(true); });
+        spendNo.addEventListener('click', function() { spendCoins(false); });
 
         function spendCoins(spend) {
             fetch('/Game/SpendCoins', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ playerId: currentPlayerId, spend: spend })
             })
-            .then(response => {
-                if (!response.ok) throw new Error('Ошибка сервера');
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
                 spendCoinsModal.style.display = 'none';
                 if (data.success && spend) {
                     taskText.textContent = data.task;
-                    timeLeft = data.timeLimit; // Устанавливаем время с сервера (30 сек)
+                    timeLeft = data.timeLimit;
                     timerDisplay.textContent = timeLeft;
                     answerModal.style.display = 'flex';
-                    startTimer(); // Запускаем таймер
+                    startTimer();
                 } else if (!data.success) {
                     alert(data.message || 'Ошибка!');
                     window.location.reload();
@@ -198,47 +195,62 @@
                     window.location.reload();
                 }
             })
-            .catch(error => {
-                console.error('Ошибка:', error);
-                alert('Произошла ошибка при обработке монет!');
-                window.location.reload();
-            });
+            .catch(error => alert('Произошла ошибка при обработке монет!'));
         }
 
-        // Обработка ответа
-        submitAnswer.addEventListener('click', function() {
+        captureOriginal.addEventListener('click', function() { captureCell(true); });
+        captureNew.addEventListener('click', function() { captureCell(false); });
+        captureCancel.addEventListener('click', function() {
+            captureModal.style.display = 'none';
+            window.location.reload();
+        });
+
+        function captureCell(useOriginalTask) {
+            fetch('/Game/CaptureCell', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerId: currentPlayerId, useOriginalTask: useOriginalTask })
+            })
+            .then(response => response.json())
+            .then(data => {
+                captureModal.style.display = 'none';
+                if (data.success) {
+                    taskText.textContent = data.task;
+                    timeLeft = data.timeLimit;
+                    timerDisplay.textContent = timeLeft;
+                    answerModal.style.display = 'flex';
+                    startTimer();
+                } else {
+                    alert(data.message || 'Ошибка при захвате!');
+                    window.location.reload();
+                }
+            })
+            .catch(error => alert('Произошла ошибка при захвате клетки!'));
+        }
+
+            submitAnswer.addEventListener('click', function() {
             const answer = parseInt(answerInput.value);
             if (isNaN(answer)) {
                 alert('Введите число!');
                 return;
             }
-            clearInterval(timerInterval); // Останавливаем таймер
+            clearInterval(timerInterval);
             fetch('/Game/SubmitAnswer', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ playerId: currentPlayerId, answer: answer })
             })
-            .then(response => {
-                if (!response.ok) throw new Error('Ошибка сервера');
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
                 answerModal.style.display = 'none';
-                if (!data.success) {
-                    alert(data.message || 'Неверный ответ!');
+                if (data.success && !data.wasCorrect) {
+                    alert('Неверный ответ! Вы вернулись на предыдущую клетку, монеты сохранены, задача обновлена.');
                 }
                 window.location.reload();
             })
-            .catch(error => {
-                console.error('Ошибка:', error);
-                alert('Произошла ошибка при отправке ответа!');
-                window.location.reload();
-            });
+            .catch(error => alert('Произошла ошибка при отправке ответа!'));
         });
 
-        // Логика таймера
         function startTimer() {
             timerInterval = setInterval(() => {
                 timeLeft--;
@@ -248,28 +260,19 @@
                     answerModal.style.display = 'none';
                     fetch('/Game/Timeout', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ playerId: currentPlayerId })
                     })
-                    .then(response => {
-                        if (!response.ok) throw new Error('Ошибка сервера');
-                        return response.json();
-                    })
+                    .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            alert(data.message || 'Время вышло!');
+                            alert(data.message + ' Вы вернулись на предыдущую клетку, монеты сохранены, задача обновлена.');
                             window.location.reload();
                         }
                     })
-                    .catch(error => {
-                        console.error('Ошибка:', error);
-                        alert('Ошибка при обработке таймаута: ' + error.message);
-                        window.location.reload();
-                    });
+                    .catch(error => alert('Ошибка при обработке таймаута!'));
                 }
-            }, 1000); // Обновляем каждую секунду
+            }, 1000);
         }
     </script>
 </body>

@@ -15,7 +15,7 @@ namespace MathInvaders.Controllers
             {
                 InitializeGame(5);
             }
-            _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id; // Устанавливаем активного игрока
+            _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
             return View(_gameState);
         }
 
@@ -38,7 +38,7 @@ namespace MathInvaders.Controllers
                 return Json(new { success = false, message = "Нельзя туда пойти!" });
             }
 
-            int oldX = currentPlayer.X, oldY = currentPlayer.Y;
+            _gameState.LastMovedCell = (currentPlayer.X, currentPlayer.Y);
             switch (request.Direction.ToLower())
             {
                 case "up": currentPlayer.Y--; break;
@@ -46,8 +46,13 @@ namespace MathInvaders.Controllers
                 case "left": currentPlayer.X--; break;
                 case "right": currentPlayer.X++; break;
             }
-            _gameState.LastMovedCell = (currentPlayer.X, currentPlayer.Y);
             var cell = _gameState.Grid[currentPlayer.X, currentPlayer.Y];
+            if (cell.OwnerId.HasValue && cell.OwnerId != currentPlayer.Id)
+            {
+                int doubleCost = cell.OriginalCost * 2;
+                var (newTask, newAnswer) = GenerateTask(cell.Difficulty + 1);
+                return Json(new { success = true, isOccupied = true, doubleCost = doubleCost, originalCost = cell.OriginalCost });
+            }
             return Json(new { success = true, cost = cell.Cost });
         }
 
@@ -66,26 +71,18 @@ namespace MathInvaders.Controllers
             }
 
             var cell = _gameState.Grid[currentPlayer.X, currentPlayer.Y];
-            if (cell.OwnerId.HasValue)
-            {
-                return Json(new { success = false, message = "Эта клетка уже принадлежит игроку!" });
-            }
-
-            if (request.Spend)
+            if (!cell.OwnerId.HasValue && request.Spend)
             {
                 if (currentPlayer.Coins >= cell.Cost)
                 {
                     currentPlayer.Coins -= cell.Cost;
+                    _gameState.CurrentAttemptCost = cell.Cost; // Сохраняем стоимость попытки
                     cell.IsRevealed = true;
                     _gameState.ShowTaskInput = true;
-                    _gameState.TimerActive = true; // Активируем таймер
-                    _gameState.LastMovedCell = null;
-                    return Json(new { success = true, task = cell.Task, timeLimit = 30 }); // Отправляем лимит времени в секундах
+                    _gameState.TimerActive = true;
+                    return Json(new { success = true, task = cell.Task, timeLimit = 30 });
                 }
-                else
-                {
-                    return Json(new { success = false, message = "Недостаточно монет!" });
-                }
+                return Json(new { success = false, message = "Недостаточно монет!" });
             }
             else
             {
@@ -96,12 +93,13 @@ namespace MathInvaders.Controllers
                 return Json(new { success = true });
             }
         }
+
         [HttpPost]
-        public IActionResult Timeout([FromBody] GameSpendRequest request)
+        public IActionResult CaptureCell([FromBody] GameCaptureRequest request)
         {
-            if (_gameState.GameOver || !_gameState.ShowTaskInput || !_gameState.TimerActive)
+            if (_gameState.GameOver || _gameState.ShowTaskInput)
             {
-                return Json(new { success = false, message = "Таймер не активен!" });
+                return Json(new { success = false, message = "Игра окончена или сейчас не время!" });
             }
 
             var currentPlayer = _gameState.Players[_gameState.CurrentPlayerIndex];
@@ -110,11 +108,32 @@ namespace MathInvaders.Controllers
                 return Json(new { success = false, message = "Сейчас не ваш ход!" });
             }
 
-            _gameState.ShowTaskInput = false;
-            _gameState.TimerActive = false;
-            _gameState.CurrentPlayerIndex = (_gameState.CurrentPlayerIndex + 1) % _gameState.Players.Count;
-            _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
-            return Json(new { success = true, message = "Время вышло!" });
+            var cell = _gameState.Grid[currentPlayer.X, currentPlayer.Y];
+            if (!cell.OwnerId.HasValue || cell.OwnerId == currentPlayer.Id)
+            {
+                return Json(new { success = false, message = "Эта клетка не принадлежит другому игроку!" });
+            }
+
+            int cost = request.UseOriginalTask ? cell.OriginalCost * 2 : cell.OriginalCost;
+            if (currentPlayer.Coins < cost)
+            {
+                return Json(new { success = false, message = "Недостаточно монет!" });
+            }
+
+            currentPlayer.Coins -= cost;
+            _gameState.CurrentAttemptCost = cost; // Сохраняем стоимость попытки
+            cell.IsRevealed = true;
+            _gameState.ShowTaskInput = true;
+            _gameState.TimerActive = true;
+
+            if (!request.UseOriginalTask)
+            {
+                var (newTask, newAnswer) = GenerateTask(cell.Difficulty + 1);
+                cell.Task = newTask;
+                cell.Answer = newAnswer;
+            }
+
+            return Json(new { success = true, task = cell.Task, timeLimit = 30 });
         }
 
         [HttpPost]
@@ -132,7 +151,9 @@ namespace MathInvaders.Controllers
             }
 
             var cell = _gameState.Grid[currentPlayer.X, currentPlayer.Y];
-            if (request.Answer == cell.Answer)
+            bool isCorrect = request.Answer == cell.Answer;
+
+            if (isCorrect)
             {
                 cell.OwnerId = currentPlayer.Id;
                 currentPlayer.CapturedCells++;
@@ -140,15 +161,57 @@ namespace MathInvaders.Controllers
             }
             else
             {
-                return Json(new { success = false, message = "Неверный ответ!" });
+                // Неправильный ответ: возвращаем монеты, позицию, скрываем задачу, меняем задачу
+                currentPlayer.Coins += _gameState.CurrentAttemptCost;
+                currentPlayer.X = _gameState.LastMovedCell.Value.X;
+                currentPlayer.Y = _gameState.LastMovedCell.Value.Y;
+                cell.IsRevealed = false;
+                var (newTask, newAnswer) = GenerateTask(cell.Difficulty);
+                cell.Task = newTask;
+                cell.Answer = newAnswer;
+                _gameState.LastMovedCell = null;
             }
 
             _gameState.ShowTaskInput = false;
+            _gameState.TimerActive = false;
+            _gameState.CurrentAttemptCost = 0; // Сбрасываем стоимость
             _gameState.CurrentPlayerIndex = (_gameState.CurrentPlayerIndex + 1) % _gameState.Players.Count;
             _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
             _gameState.CheckGameOver();
 
-            return Json(new { success = true });
+            return Json(new { success = true, wasCorrect = isCorrect });
+        }
+
+        [HttpPost]
+        public IActionResult Timeout([FromBody] GameSpendRequest request)
+        {
+            if (_gameState.GameOver || !_gameState.ShowTaskInput || !_gameState.TimerActive)
+            {
+                return Json(new { success = false, message = "Таймер не активен!" });
+            }
+
+            var currentPlayer = _gameState.Players[_gameState.CurrentPlayerIndex];
+            if (currentPlayer.Id != request.PlayerId)
+            {
+                return Json(new { success = false, message = "Сейчас не ваш ход!" });
+            }
+
+            var cell = _gameState.Grid[currentPlayer.X, currentPlayer.Y];
+            currentPlayer.Coins += _gameState.CurrentAttemptCost;
+            currentPlayer.X = _gameState.LastMovedCell.Value.X;
+            currentPlayer.Y = _gameState.LastMovedCell.Value.Y;
+            cell.IsRevealed = false;
+            var (newTask, newAnswer) = GenerateTask(cell.Difficulty);
+            cell.Task = newTask;
+            cell.Answer = newAnswer;
+            _gameState.LastMovedCell = null;
+
+            _gameState.ShowTaskInput = false;
+            _gameState.TimerActive = false;
+            _gameState.CurrentAttemptCost = 0; // Сбрасываем стоимость
+            _gameState.CurrentPlayerIndex = (_gameState.CurrentPlayerIndex + 1) % _gameState.Players.Count;
+            _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
+            return Json(new { success = true, message = "Время вышло!" });
         }
 
         [HttpPost]
@@ -184,12 +247,12 @@ namespace MathInvaders.Controllers
                         Task = task,
                         Answer = answer,
                         Difficulty = difficulty,
-                        Cost = difficulty
+                        Cost = difficulty,
+                        OriginalCost = difficulty
                     };
                 }
             }
 
-            // Остальной код остаётся без изменений
             foreach (var player in _gameState.Players)
             {
                 var startCell = _gameState.Grid[player.X, player.Y];
@@ -204,21 +267,29 @@ namespace MathInvaders.Controllers
             _gameState.Winner = null;
             _gameState.ShowTaskInput = false;
             _gameState.LastMovedCell = null;
+            _gameState.CurrentAttemptCost = 0;
         }
+
         private (string task, int answer) GenerateTask(int difficulty)
         {
             int a = _random.Next(1, 10 * difficulty);
             int b = _random.Next(1, 10 * difficulty);
-            switch (_random.Next(0, 4)) // Случайный оператор
+            switch (_random.Next(0, 4))
             {
-                case 0: return ($"{a} + {b} = ?", a + b); // Сложение
-                case 1: return ($"{a} - {b} = ?", a - b); // Вычитание
-                case 2: return ($"{a} * {b} = ?", a * b); // Умножение
+                case 0: return ($"{a} + {b} = ?", a + b);
+                case 1: return ($"{a} - {b} = ?", a - b);
+                case 2: return ($"{a} * {b} = ?", a * b);
                 case 3:
-                    int product = a * b; // Деление, чтобы ответ был целым
+                    int product = a * b;
                     return ($"{product} / {b} = ?", a);
-                default: return ($"{a} + {b} = ?", a + b); // На всякий случай
+                default: return ($"{a} + {b} = ?", a + b);
             }
         }
+    }
+
+    public class GameCaptureRequest
+    {
+        public int PlayerId { get; set; }
+        public bool UseOriginalTask { get; set; }
     }
 }

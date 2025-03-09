@@ -9,6 +9,7 @@
         public int? OwnerId { get; set; } // ID игрока, захватившего клетку
         public int Difficulty { get; set; } // Сложность (1-3)
         public int Cost { get; set; } // Стоимость в монетах
+        public int OriginalCost { get; set; }
         public bool IsRevealed { get; set; } = false; // Открыта ли клетка
     }
 }

@@ -9,8 +9,9 @@
         public string Winner { get; set; }
         public bool ShowTaskInput { get; set; } = false;
         public (int X, int Y)? LastMovedCell { get; set; } = null;
-        public int ActivePlayerId { get; set; } // ID активного игрока
+        public int ActivePlayerId { get; set; }
         public bool TimerActive { get; set; } = false;
+        public int CurrentAttemptCost { get; set; } = 0; // Новое поле для стоимости текущей попытки
 
         public bool CanMove(Player player, string direction)
         {
@@ -25,7 +26,7 @@
             }
             if (newX < 0 || newX >= Grid.GetLength(0) || newY < 0 || newY >= Grid.GetLength(1))
                 return false;
-            return !Players.Any(p => p.X == newX && p.Y == newY && p.Id != player.Id);
+            return true;
         }
 
         public void CheckGameOver()
