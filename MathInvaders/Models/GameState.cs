@@ -4,14 +4,35 @@
     {
         public List<Player> Players { get; set; } = new List<Player>();
         public Cell[,] Grid { get; set; }
-        public int CurrentPlayerIndex { get; set; } = 0;
-        public bool GameOver { get; set; } = false;
-        public string Winner { get; set; }
-        public bool ShowTaskInput { get; set; } = false;
-        public (int X, int Y)? LastMovedCell { get; set; } = null;
+        public int CurrentPlayerIndex { get; set; }
         public int ActivePlayerId { get; set; }
-        public bool TimerActive { get; set; } = false;
-        public int CurrentAttemptCost { get; set; } = 0; // Новое поле для стоимости текущей попытки
+        public bool GameOver { get; set; }
+        public string Winner { get; set; }
+        public bool ShowTaskInput { get; set; }
+        public (int X, int Y)? LastMovedCell { get; set; }
+        public int CurrentAttemptCost { get; set; }
+        public bool TimerActive { get; set; }
+        public List<int> UsedHardTaskIndices { get; set; } = new List<int>(); 
+
+        public void CheckGameOver()
+        {
+            
+            bool allCellsCaptured = true;
+            foreach (var cell in Grid)
+            {
+                if (!cell.OwnerId.HasValue)
+                {
+                    allCellsCaptured = false;
+                    break;
+                }
+            }
+            if (allCellsCaptured)
+            {
+                GameOver = true;
+                var winner = Players.OrderByDescending(p => p.CapturedCells).First();
+                Winner = $"Игра окончена! Победитель: {winner.Name} с {winner.CapturedCells} клетками!";
+            }
+        }
 
         public bool CanMove(Player player, string direction)
         {
@@ -24,33 +45,7 @@
                 case "right": newX++; break;
                 default: return false;
             }
-            if (newX < 0 || newX >= Grid.GetLength(0) || newY < 0 || newY >= Grid.GetLength(1))
-                return false;
-            return true;
-        }
-
-        public void CheckGameOver()
-        {
-            bool allCoinsSpent = Players.All(p => p.Coins == 0);
-            bool allCellsCaptured = true;
-            for (int x = 0; x < Grid.GetLength(0); x++)
-            {
-                for (int y = 0; y < Grid.GetLength(1); y++)
-                {
-                    if (!Grid[x, y].OwnerId.HasValue)
-                    {
-                        allCellsCaptured = false;
-                        break;
-                    }
-                }
-            }
-
-            if (allCoinsSpent || allCellsCaptured)
-            {
-                GameOver = true;
-                var winner = Players.OrderByDescending(p => p.CapturedCells).First();
-                Winner = $"{winner.Name} победил с {winner.CapturedCells} клетками!";
-            }
+            return newX >= 0 && newX < Grid.GetLength(0) && newY >= 0 && newY < Grid.GetLength(1);
         }
     }
 }

@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using MathInvaders.Models;
 using static MathInvaders.Models.GameRequest;
+using System.Text.Json;
 
 namespace MathInvaders.Controllers
 {
@@ -8,6 +9,17 @@ namespace MathInvaders.Controllers
     {
         private static GameState _gameState = new GameState();
         private static Random _random = new Random();
+        private static HardTask[] _hardTasks;
+
+        public GameController(IWebHostEnvironment env)
+        {
+            if (_hardTasks == null)
+            {
+                string filePath = Path.Combine(env.WebRootPath, "data", "hard_tasks.json");
+                string jsonString = System.IO.File.ReadAllText(filePath);
+                _hardTasks = JsonSerializer.Deserialize<HardTask[]>(jsonString);
+            }
+        }
 
         public IActionResult Index()
         {
@@ -76,7 +88,7 @@ namespace MathInvaders.Controllers
                 if (currentPlayer.Coins >= cell.Cost)
                 {
                     currentPlayer.Coins -= cell.Cost;
-                    _gameState.CurrentAttemptCost = cell.Cost; // Сохраняем стоимость попытки
+                    _gameState.CurrentAttemptCost = cell.Cost;
                     cell.IsRevealed = true;
                     _gameState.ShowTaskInput = true;
                     _gameState.TimerActive = true;
@@ -121,7 +133,7 @@ namespace MathInvaders.Controllers
             }
 
             currentPlayer.Coins -= cost;
-            _gameState.CurrentAttemptCost = cost; // Сохраняем стоимость попытки
+            _gameState.CurrentAttemptCost = cost;
             cell.IsRevealed = true;
             _gameState.ShowTaskInput = true;
             _gameState.TimerActive = true;
@@ -161,7 +173,6 @@ namespace MathInvaders.Controllers
             }
             else
             {
-                // Неправильный ответ: возвращаем монеты, позицию, скрываем задачу, меняем задачу
                 currentPlayer.Coins += _gameState.CurrentAttemptCost;
                 currentPlayer.X = _gameState.LastMovedCell.Value.X;
                 currentPlayer.Y = _gameState.LastMovedCell.Value.Y;
@@ -174,7 +185,7 @@ namespace MathInvaders.Controllers
 
             _gameState.ShowTaskInput = false;
             _gameState.TimerActive = false;
-            _gameState.CurrentAttemptCost = 0; // Сбрасываем стоимость
+            _gameState.CurrentAttemptCost = 0;
             _gameState.CurrentPlayerIndex = (_gameState.CurrentPlayerIndex + 1) % _gameState.Players.Count;
             _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
             _gameState.CheckGameOver();
@@ -208,7 +219,7 @@ namespace MathInvaders.Controllers
 
             _gameState.ShowTaskInput = false;
             _gameState.TimerActive = false;
-            _gameState.CurrentAttemptCost = 0; // Сбрасываем стоимость
+            _gameState.CurrentAttemptCost = 0;
             _gameState.CurrentPlayerIndex = (_gameState.CurrentPlayerIndex + 1) % _gameState.Players.Count;
             _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
             return Json(new { success = true, message = "Время вышло!" });
@@ -234,6 +245,7 @@ namespace MathInvaders.Controllers
             _gameState.Players.AddRange(players);
 
             _gameState.Grid = new Cell[size, size];
+            _gameState.UsedHardTaskIndices.Clear();
             for (int x = 0; x < size; x++)
             {
                 for (int y = 0; y < size; y++)
@@ -272,24 +284,41 @@ namespace MathInvaders.Controllers
 
         private (string task, int answer) GenerateTask(int difficulty)
         {
-            int a = _random.Next(1, 10 * difficulty);
-            int b = _random.Next(1, 10 * difficulty);
-            switch (_random.Next(0, 4))
+            if (difficulty == 3)
             {
-                case 0: return ($"{a} + {b} = ?", a + b);
-                case 1: return ($"{a} - {b} = ?", a - b);
-                case 2: return ($"{a} * {b} = ?", a * b);
-                case 3:
-                    int product = a * b;
-                    return ($"{product} / {b} = ?", a);
-                default: return ($"{a} + {b} = ?", a + b);
+                
+                var availableIndices = Enumerable.Range(0, _hardTasks.Length)
+                    .Where(i => !_gameState.UsedHardTaskIndices.Contains(i))
+                    .ToList();
+
+                
+                if (!availableIndices.Any())
+                {
+                    _gameState.UsedHardTaskIndices.Clear();
+                    availableIndices = Enumerable.Range(0, _hardTasks.Length).ToList();
+                }
+
+                
+                int index = availableIndices[_random.Next(availableIndices.Count)];
+                _gameState.UsedHardTaskIndices.Add(index); 
+                return (_hardTasks[index].Task, _hardTasks[index].Answer);
+            }
+            else
+            {
+                
+                int a = _random.Next(1, 10 * difficulty);
+                int b = _random.Next(1, 10 * difficulty);
+                switch (_random.Next(0, 4))
+                {
+                    case 0: return ($"{a} + {b} = ?", a + b);
+                    case 1: return ($"{a} - {b} = ?", a - b);
+                    case 2: return ($"{a} * {b} = ?", a * b);
+                    case 3:
+                        int product = a * b;
+                        return ($"{product} / {b} = ?", a);
+                    default: return ($"{a} + {b} = ?", a + b);
+                }
             }
         }
-    }
-
-    public class GameCaptureRequest
-    {
-        public int PlayerId { get; set; }
-        public bool UseOriginalTask { get; set; }
     }
 }
