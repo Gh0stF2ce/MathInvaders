@@ -12,11 +12,11 @@
         public (int X, int Y)? LastMovedCell { get; set; }
         public int CurrentAttemptCost { get; set; }
         public bool TimerActive { get; set; }
-        public List<int> UsedHardTaskIndices { get; set; } = new List<int>(); 
+        public List<int> UsedHardTaskIndices { get; set; } = new List<int>();
+        public int ClassLevel { get; set; } // Новый параметр: 5, 6 или 7 класс
 
         public void CheckGameOver()
         {
-            
             bool allCellsCaptured = true;
             foreach (var cell in Grid)
             {

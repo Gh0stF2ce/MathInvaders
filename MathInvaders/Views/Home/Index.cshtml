@@ -7,38 +7,52 @@
     <title>Math Invaders</title>
     <link rel="stylesheet" href="~/css/site.css" />
     <style>
-        .home-container {
-            text-align: center;
-            margin-top: 100px;
-            font-family: Arial, sans-serif;
-        }
-        .title {
-            font-size: 48px;
-            color: #333;
-            margin-bottom: 20px;
-        }
-        .play-button {
-            padding: 15px 30px;
-            font-size: 20px;
-            background-color: #4CAF50;
-            color: white;
+        #playButton {
+            padding: 20px 40px; /* Увеличиваем размер кнопки */
+            font-size: 24px; /* Увеличиваем шрифт */
+            background-color: #e94560; /* Основной цвет из гаммы */
             border: none;
             border-radius: 5px;
+            color: #fff;
             cursor: pointer;
             transition: background-color 0.3s;
+            display: block; /* Делаем блочным для центрирования */
+            margin: 20px auto; /* Центрируем по горизонтали */
         }
-        .play-button:hover {
-            background-color: #45a049;
+
+            #playButton:hover {
+                background-color: #ff6f61; /* Hover-эффект из гаммы */
+            }
+
+        #classSelectionForm {
+            text-align: center; /* Центрируем содержимое формы */
         }
     </style>
 </head>
 <body>
-    <div class="home-container">
-        <h1 class="title">Math Invaders</h1>
+    <div class="container">
+        <h1>Math Invaders</h1>
         <p>Добро пожаловать в математическую игру на захват территорий!</p>
-        <form asp-controller="Game" asp-action="Index" method="get">
-            <button type="submit" class="play-button">Играть</button>
+        <button id="playButton">Играть</button>
+        <form id="classSelectionForm" asp-controller="Game" asp-action="StartGame" method="post" style="display: none;">
+            <label for="classLevel">Выберите класс:</label>
+            <select name="classLevel" id="classLevel">
+                <option value="5">5 класс</option>
+                <option value="6">6 класс</option>
+                <option value="7">7 класс</option>
+            </select>
+            <input type="submit" value="Начать игру" />
         </form>
     </div>
+
+    <script>
+        const playButton = document.getElementById('playButton');
+        const classSelectionForm = document.getElementById('classSelectionForm');
+
+        playButton.addEventListener('click', function() {
+            playButton.style.display = 'none';
+            classSelectionForm.style.display = 'block';
+        });
+    </script>
 </body>
 </html>

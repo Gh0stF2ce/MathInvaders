@@ -1,7 +1,7 @@
-/* Подключаем Google Fonts */
+/* Подключение Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
-/* Общий стиль */
+/* Основные стили */
 body {
     font-family: 'Roboto', sans-serif;
     background-color: #1a1a2e;
@@ -24,7 +24,7 @@ h1, h2, h3 {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* Таблица поля */
+/* Игровая таблица */
 .game-table {
     border-collapse: collapse;
     margin: 20px auto;
@@ -58,7 +58,7 @@ h1, h2, h3 {
     }
 
     .game-table .available {
-        border: 2px dashed #00ffcc; /* Подсветка доступных клеток */
+        border: 2px dashed #00ffcc;
         background-color: #1b4f72;
     }
 
@@ -142,6 +142,72 @@ h1, h2, h3 {
     text-align: center;
     font-weight: bold;
 }
+
+/* Таблица лидеров */
+.leaderboard {
+    border-collapse: collapse;
+    margin: 20px auto;
+    width: 80%;
+    background-color: #0f3460;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+    .leaderboard th, .leaderboard td {
+        padding: 12px;
+        text-align: center;
+        border-bottom: 1px solid #e94560;
+    }
+
+    .leaderboard th {
+        background-color: #e94560;
+        color: #fff;
+        font-weight: bold;
+    }
+
+    .leaderboard td {
+        color: #e0e0e0;
+    }
+
+    .leaderboard tr:nth-child(even) {
+        background-color: #1b4f72;
+    }
+
+    .leaderboard tr:hover {
+        background-color: #ff6f61;
+        color: #fff;
+        transition: background-color 0.3s;
+    }
+
+/* Форма выбора класса */
+form {
+    text-align: center;
+    margin: 20px 0;
+}
+
+select {
+    padding: 10px;
+    border: 1px solid #e94560;
+    border-radius: 5px;
+    background-color: #0f3460;
+    color: #e0e0e0;
+    font-size: 16px;
+    margin-right: 10px;
+}
+
+input[type="submit"] {
+    padding: 10px 20px;
+    background-color: #e94560;
+    border: none;
+    border-radius: 5px;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+    input[type="submit"]:hover {
+        background-color: #ff6f61;
+    }
 
 /* Анимации */
 @keyframes fadeIn {

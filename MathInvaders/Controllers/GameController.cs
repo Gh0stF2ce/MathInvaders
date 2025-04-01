@@ -10,25 +10,43 @@ namespace MathInvaders.Controllers
         private static GameState _gameState = new GameState();
         private static Random _random = new Random();
         private static HardTask[] _hardTasks;
+        private readonly IWebHostEnvironment _env;
 
         public GameController(IWebHostEnvironment env)
         {
-            if (_hardTasks == null)
-            {
-                string filePath = Path.Combine(env.WebRootPath, "data", "hard_tasks.json");
-                string jsonString = System.IO.File.ReadAllText(filePath);
-                _hardTasks = JsonSerializer.Deserialize<HardTask[]>(jsonString);
-            }
+            _env = env;
         }
 
         public IActionResult Index()
         {
             if (_gameState.Players.Count == 0)
             {
-                InitializeGame(5);
+                return RedirectToAction("Index", "Home");
             }
             _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
             return View(_gameState);
+        }
+
+        [HttpPost]
+        public IActionResult StartGame(int classLevel)
+        {
+            if (classLevel < 5 || classLevel > 7)
+            {
+                return RedirectToAction("Index", "Home");
+            }
+
+            _gameState = new GameState { ClassLevel = classLevel };
+            LoadHardTasks(classLevel);
+            InitializeGame(5);
+            return RedirectToAction("Index");
+        }
+
+        private void LoadHardTasks(int classLevel)
+        {
+            string fileName = $"hard_tasks_{classLevel}.json";
+            string filePath = Path.Combine(_env.WebRootPath, "data", fileName);
+            string jsonString = System.IO.File.ReadAllText(filePath);
+            _hardTasks = JsonSerializer.Deserialize<HardTask[]>(jsonString);
         }
 
         [HttpPost]
@@ -228,9 +246,7 @@ namespace MathInvaders.Controllers
         [HttpPost]
         public IActionResult Reset()
         {
-            _gameState = new GameState();
-            InitializeGame(5);
-            return RedirectToAction("Index");
+            return RedirectToAction("Index", "Home");
         }
 
         private void InitializeGame(int size)
@@ -286,37 +302,71 @@ namespace MathInvaders.Controllers
         {
             if (difficulty == 3)
             {
-                
                 var availableIndices = Enumerable.Range(0, _hardTasks.Length)
                     .Where(i => !_gameState.UsedHardTaskIndices.Contains(i))
                     .ToList();
 
-                
                 if (!availableIndices.Any())
                 {
                     _gameState.UsedHardTaskIndices.Clear();
                     availableIndices = Enumerable.Range(0, _hardTasks.Length).ToList();
                 }
 
-                
                 int index = availableIndices[_random.Next(availableIndices.Count)];
-                _gameState.UsedHardTaskIndices.Add(index); 
+                _gameState.UsedHardTaskIndices.Add(index);
                 return (_hardTasks[index].Task, _hardTasks[index].Answer);
             }
             else
             {
-                
-                int a = _random.Next(1, 10 * difficulty);
-                int b = _random.Next(1, 10 * difficulty);
-                switch (_random.Next(0, 4))
+                switch (_gameState.ClassLevel)
                 {
-                    case 0: return ($"{a} + {b} = ?", a + b);
-                    case 1: return ($"{a} - {b} = ?", a - b);
-                    case 2: return ($"{a} * {b} = ?", a * b);
-                    case 3:
-                        int product = a * b;
-                        return ($"{product} / {b} = ?", a);
-                    default: return ($"{a} + {b} = ?", a + b);
+                    case 5: // 5 класс: простые операции
+                        int a5 = _random.Next(1, 20); // Числа до 20
+                        int b5 = _random.Next(1, 10); // Второе число до 10
+                        switch (_random.Next(0, 4))
+                        {
+                            case 0: return ($"{a5} + {b5} = ?", a5 + b5); // Сложение
+                            case 1: return ($"{a5} - {b5} = ?", a5 - b5); // Вычитание
+                            case 2: return ($"{a5} * {b5} = ?", a5 * b5); // Умножение на однозначное
+                            case 3:
+                                int product5 = a5 * b5;
+                                return ($"{product5} / {b5} = ?", a5); // Деление без остатка
+                            default: return ($"{a5} + {b5} = ?", a5 + b5);
+                        }
+
+                    case 6: // 6 класс: двузначные числа и простые выражения
+                        int a6 = _random.Next(10, 50); // Числа от 10 до 50
+                        int b6 = _random.Next(5, 20);  // Второе число от 5 до 20
+                        switch (_random.Next(0, 4))
+                        {
+                            case 0: return ($"{a6} + {b6} = ?", a6 + b6); // Сложение
+                            case 1: return ($"{a6} - {b6} = ?", a6 - b6); // Вычитание
+                            case 2: return ($"{a6} * {b6} = ?", a6 * b6); // Умножение двузначных
+                            case 3:
+                                int c6 = _random.Next(2, 10);
+                                return ($"{a6} * {c6} / {c6} = ?", a6); // Простое выражение
+                            default: return ($"{a6} + {b6} = ?", a6 + b6);
+                        }
+
+                    case 7: // 7 класс: сложные выражения
+                        int a7 = _random.Next(20, 100); // Числа от 20 до 100
+                        int b7 = _random.Next(10, 50);  // Второе число от 10 до 50
+                        int c7 = _random.Next(2, 10);   // Третье число для выражений
+                        switch (_random.Next(0, 4))
+                        {
+                            case 0: return ($"{a7} + {b7} - {c7} = ?", a7 + b7 - c7); // Сложение и вычитание
+                            case 1: return ($"{a7} - {b7} + {c7} = ?", a7 - b7 + c7); // Вычитание и сложение
+                            case 2: return ($"{a7} * {c7} + {b7} = ?", a7 * c7 + b7); // Умножение и сложение
+                            case 3:
+                                int product7 = a7 * c7;
+                                return ($"{product7} / {c7} - {b7} = ?", a7 - b7); // Деление и вычитание
+                            default: return ($"{a7} + {b7} = ?", a7 + b7);
+                        }
+
+                    default: // На случай ошибки
+                        int a = _random.Next(1, 10 * difficulty);
+                        int b = _random.Next(1, 10 * difficulty);
+                        return ($"{a} + {b} = ?", a + b);
                 }
             }
         }
