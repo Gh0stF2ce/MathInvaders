@@ -6,6 +6,12 @@
 <html>
 <head>
     <link rel="stylesheet" href="~/css/site.css" />
+    <style>
+        /* Запрещаем выделение текста в модальном окне */
+        .modal-content {
+            user-select: none; /* Отключаем выделение текста */
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -13,6 +19,26 @@
         @if (Model.GameOver)
         {
             <h2>@Model.Winner</h2>
+            <h3>Таблица лидеров</h3>
+            <table class="leaderboard">
+                <thead>
+                    <tr>
+                        <th>Игрок</th>
+                        <th>Захвачено клеток</th>
+                        <th>Остаток монет</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var player in Model.Players.OrderByDescending(p => p.CapturedCells))
+                    {
+                        <tr>
+                            <td>@player.Name</td>
+                            <td>@player.CapturedCells</td>
+                            <td>@player.Coins</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         }
         else
         {
@@ -103,7 +129,7 @@
         <div class="modal-content">
             <h3>Введите ответ</h3>
             <p>Задача: <span id="taskText"></span></p>
-            <p>Осталось времени: <span id="timer">30</span> сек</p>
+            <p>Осталось времени: <span id="timer">15</span> сек</p>
             <input type="number" id="answerInput" required />
             <button id="submitAnswer">Ответить</button>
         </div>
@@ -127,8 +153,13 @@
         const submitAnswer = document.getElementById('submitAnswer');
         const timerDisplay = document.getElementById('timer');
         const currentPlayerId = @Model.ActivePlayerId;
-        let timeLeft = 30;
+        let timeLeft = 15; // Уменьшаем таймер до 15 секунд
         let timerInterval = null;
+
+        // Отключаем контекстное меню в модальном окне
+        answerModal.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
 
         gameField.addEventListener('click', function(e) {
             const td = e.target.closest('td');
@@ -184,7 +215,7 @@
                 spendCoinsModal.style.display = 'none';
                 if (data.success && spend) {
                     taskText.textContent = data.task;
-                    timeLeft = data.timeLimit;
+                    timeLeft = 15; // Устанавливаем новый таймер
                     timerDisplay.textContent = timeLeft;
                     answerModal.style.display = 'flex';
                     startTimer();
@@ -216,7 +247,7 @@
                 captureModal.style.display = 'none';
                 if (data.success) {
                     taskText.textContent = data.task;
-                    timeLeft = data.timeLimit;
+                    timeLeft = 15; // Новый таймер для захвата
                     timerDisplay.textContent = timeLeft;
                     answerModal.style.display = 'flex';
                     startTimer();
@@ -228,7 +259,7 @@
             .catch(error => alert('Произошла ошибка при захвате клетки!'));
         }
 
-            submitAnswer.addEventListener('click', function() {
+        submitAnswer.addEventListener('click', function() {
             const answer = parseInt(answerInput.value);
             if (isNaN(answer)) {
                 alert('Введите число!');
