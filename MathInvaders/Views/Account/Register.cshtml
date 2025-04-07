@@ -1,0 +1,22 @@
+﻿@{
+    ViewData["Title"] = "Регистрация";
+}
+<div class="container">
+    <h1>Регистрация</h1>
+    <form asp-action="Register" method="post">
+        <div>
+            <label for="username">Имя пользователя:</label>
+            <input type="text" id="username" name="username" required />
+        </div>
+        <div>
+            <label for="password">Пароль:</label>
+            <input type="password" id="password" name="password" required />
+        </div>
+        @if (ViewBag.Error != null)
+        {
+            <p style="color: red;">@ViewBag.Error</p>
+        }
+        <input type="submit" value="Зарегистрироваться" />
+        <p>Уже есть аккаунт? <a asp-action="Login">Войти</a></p>
+    </form>
+</div>

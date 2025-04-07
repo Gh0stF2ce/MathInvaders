@@ -7,34 +7,52 @@
     <title>Math Invaders</title>
     <link rel="stylesheet" href="~/css/site.css" />
     <style>
-        #playButton {
-            padding: 20px 40px; /* Увеличиваем размер кнопки */
-            font-size: 24px; /* Увеличиваем шрифт */
-            background-color: #e94560; /* Основной цвет из гаммы */
-            border: none;
-            border-radius: 5px;
-            color: #fff;
-            cursor: pointer;
-            transition: background-color 0.3s;
-            display: block; /* Делаем блочным для центрирования */
-            margin: 20px auto; /* Центрируем по горизонтали */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-            #playButton:hover {
-                background-color: #ff6f61; /* Hover-эффект из гаммы */
+        .auth-buttons {
+            margin-right: 20px;
+        }
+
+            .auth-buttons a {
+                margin-left: 10px;
+                text-decoration: none;
+                padding: 5px 10px;
+                border: 1px solid #e94560;
+                border-radius: 5px;
+                color: #e94560;
             }
 
-        #classSelectionForm {
-            text-align: center; /* Центрируем содержимое формы */
-        }
+                .auth-buttons a:hover {
+                    background-color: #e94560;
+                    color: white;
+                }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Math Invaders</h1>
+        <div class="header">
+            <h1>Math Invaders</h1>
+            <div class="auth-buttons">
+                @if (User.Identity.IsAuthenticated)
+                {
+                    <span>Привет, @User.Identity.Name!</span>
+                    <form asp-controller="Account" asp-action="Logout" method="post" style="display: inline;">
+                        <button type="submit" style="margin-left: 10px;">Выйти</button>
+                    </form>
+                }
+                else
+                {
+                    <a asp-controller="Account" asp-action="Login">Вход</a>
+                    <a asp-controller="Account" asp-action="Register">Регистрация</a>
+                }
+            </div>
+        </div>
         <p>Добро пожаловать в математическую игру на захват территорий!</p>
-        <button id="playButton">Играть</button>
-        <form id="classSelectionForm" asp-controller="Game" asp-action="StartGame" method="post" style="display: none;">
+        <form asp-controller="Game" asp-action="StartGame" method="post">
             <label for="classLevel">Выберите класс:</label>
             <select name="classLevel" id="classLevel">
                 <option value="5">5 класс</option>
@@ -44,15 +62,5 @@
             <input type="submit" value="Начать игру" />
         </form>
     </div>
-
-    <script>
-        const playButton = document.getElementById('playButton');
-        const classSelectionForm = document.getElementById('classSelectionForm');
-
-        playButton.addEventListener('click', function() {
-            playButton.style.display = 'none';
-            classSelectionForm.style.display = 'block';
-        });
-    </script>
 </body>
 </html>
