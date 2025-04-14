@@ -1,310 +1,333 @@
-﻿@model MathInvaders.Models.GameState
+﻿@model MathInvaders.Models.GameStateDto
 @{
-    ViewData["Title"] = "Math Invaders";
+    ViewData["Title"] = "Math Invaders - Игра";
 }
 <!DOCTYPE html>
 <html>
 <head>
-    <link rel="stylesheet" href="~/css/site.css" />
-    <style>
-        /* Запрещаем выделение текста в модальном окне */
-        .modal-content {
-            user-select: none; /* Отключаем выделение текста */
-        }
-    </style>
+    <title>Math Invaders - Игра</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
     <div class="container">
-        <h1>Захватчики</h1>
-        @if (Model.GameOver)
-        {
-            <h2>@Model.Winner</h2>
-            <h3>Таблица лидеров</h3>
-            <table class="leaderboard">
-                <thead>
-                    <tr>
-                        <th>Игрок</th>
-                        <th>Захвачено клеток</th>
-                        <th>Остаток монет</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var player in Model.Players.OrderByDescending(p => p.CapturedCells))
-                    {
-                        <tr>
-                            <td>@player.Name</td>
-                            <td>@player.CapturedCells</td>
-                            <td>@player.Coins</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        }
-        else
-        {
-            <h3>Текущий игрок: @Model.Players[Model.CurrentPlayerIndex].Name</h3>
-        }
-        @if (TempData["Message"] != null)
-        {
-            <p class="message">@TempData["Message"]</p>
-        }
-        <p>Active Player ID (для отладки): @Model.ActivePlayerId</p>
-        <table class="game-table" id="gameField">
-            @for (int y = 0; y < Model.Grid.GetLength(1); y++)
-            {
-                <tr>
-                    @for (int x = 0; x < Model.Grid.GetLength(0); x++)
-                    {
-                        var cell = Model.Grid[x, y];
-                        var isHighlighted = Model.LastMovedCell.HasValue && Model.LastMovedCell.Value.X == x && Model.LastMovedCell.Value.Y == y;
-                        var currentPlayer = Model.Players.FirstOrDefault(p => p.Id == Model.ActivePlayerId);
-                        var isCurrentPlayerCell = currentPlayer != null && currentPlayer.X == x && currentPlayer.Y == y;
-                        var isAvailable = !isCurrentPlayerCell && currentPlayer != null && Math.Abs(currentPlayer.X - x) + Math.Abs(currentPlayer.Y - y) == 1;
-                        <td class="@(isHighlighted ? "highlight" : "") @(isCurrentPlayerCell ? "current-player-cell" : "") @(isAvailable ? "available" : "")" data-x="@x" data-y="@y">
-                            @if (cell.OwnerId.HasValue)
-                            {
-                                <span>Игрок @(cell.OwnerId)</span>
-                            }
-                            else if (!cell.IsRevealed)
-                            {
-                                <span>Сложность: @cell.Difficulty<br />Стоимость: @cell.Cost</span>
-                            }
-                            else
-                            {
-                                <span>@cell.Task</span>
-                            }
-                            @foreach (var player in Model.Players)
-                            {
-                                if (player.X == x && player.Y == y)
-                                {
-                                    <span class="player">@player.Name</span>
-                                }
-                            }
-                        </td>
-                    }
-                </tr>
-            }
-        </table>
-        <div>
-            <h3>Игроки:</h3>
-            <ul class="players-list">
-                @foreach (var player in Model.Players)
-                {
-                    var isCurrent = player.Id == Model.ActivePlayerId;
-                    <li class="@(isCurrent ? "current-player" : "")">
-                        @player.Name: Монеты = @player.Coins, Клетки = @player.CapturedCells (X: @player.X, Y: @player.Y)
-                    </li>
-                }
-            </ul>
+        <h1>Math Invaders</h1>
+        <div class="game-container">
+            <div class="player-info">
+                Текущий игрок: <strong id="playerName">@Model.Players.FirstOrDefault(p => p.Id == Model.ActivePlayerId)?.Name</strong>
+                (Active Player ID: @Model.ActivePlayerId)
+            </div>
+            <div class="game-field" id="gameField">
+                <div class="grid" id="gameGrid"></div>
+            </div>
+            <div id="gameOverMessage" class="game-over">@Model.Winner</div>
+            <div class="players-list" id="playersListContainer">
+                <h3>Игроки:</h3>
+                <div id="playersList"></div>
+            </div>
+            <button class="new-game-button" onclick="resetGame()">Новая игра</button>
         </div>
-        <form asp-action="Reset" method="post">
-            <input type="submit" value="Новая игра" />
-        </form>
-    </div>
 
-    <!-- Модальное окно для траты монет -->
-    <div id="spendCoinsModal" class="modal">
-        <div class="modal-content">
-            <h3>Тратить монеты?</h3>
-            <p>Стоимость: <span id="coinCost"></span> монет</p>
-            <button id="spendYes">Да</button>
-            <button id="spendNo">Нет</button>
+        <!-- Модальное окно для задач -->
+        <div id="taskModal" class="modal" style="@(Model.ShowTaskInput ? "display: flex;" : "display: none;")">
+            <div class="modal-content">
+                <p id="taskText"></p>
+                <input type="number" id="taskAnswer" />
+                <button onclick="submitAnswer()">Ответить</button>
+                <div id="timer"></div>
+            </div>
         </div>
-    </div>
 
-    <!-- Модальное окно для захвата чужой клетки -->
-    <div id="captureModal" class="modal">
-        <div class="modal-content">
-            <h3>Захватить клетку?</h3>
-            <p>Вариант 1: Решить ту же задачу за <span id="doubleCost"></span> монет</p>
-            <p>Вариант 2: Решить более сложную задачу за <span id="originalCost"></span> монет</p>
-            <button id="captureOriginal">Вариант 1</button>
-            <button id="captureNew">Вариант 2</button>
-            <button id="captureCancel">Отмена</button>
-        </div>
-    </div>
-
-    <!-- Модальное окно для ввода ответа -->
-    <div id="answerModal" class="modal">
-        <div class="modal-content">
-            <h3>Введите ответ</h3>
-            <p>Задача: <span id="taskText"></span></p>
-            <p>Осталось времени: <span id="timer">15</span> сек</p>
-            <input type="number" id="answerInput" required />
-            <button id="submitAnswer">Ответить</button>
+        <!-- Модальное окно для выбора захвата клетки -->
+        <div id="captureModal" class="modal capture-modal">
+            <div class="modal-content">
+                <p id="captureText"></p>
+                <button onclick="chooseCapture(true)">Удвоенная стоимость</button>
+                <button onclick="chooseCapture(false)">Более сложная задача</button>
+            </div>
         </div>
     </div>
 
     <script>
-        const gameField = document.getElementById('gameField');
-        const spendCoinsModal = document.getElementById('spendCoinsModal');
-        const captureModal = document.getElementById('captureModal');
-        const answerModal = document.getElementById('answerModal');
-        const spendYes = document.getElementById('spendYes');
-        const spendNo = document.getElementById('spendNo');
-        const coinCost = document.getElementById('coinCost');
-        const doubleCost = document.getElementById('doubleCost');
-        const originalCost = document.getElementById('originalCost');
-        const captureOriginal = document.getElementById('captureOriginal');
-        const captureNew = document.getElementById('captureNew');
-        const captureCancel = document.getElementById('captureCancel');
-        const taskText = document.getElementById('taskText');
-        const answerInput = document.getElementById('answerInput');
-        const submitAnswer = document.getElementById('submitAnswer');
-        const timerDisplay = document.getElementById('timer');
-        const currentPlayerId = @Model.ActivePlayerId;
-        let timeLeft = 15; // Уменьшаем таймер до 15 секунд
+        let gameState = @Html.Raw(Json.Serialize(Model));
+        let activePlayerId = @Model.ActivePlayerId;
         let timerInterval = null;
+        let currentCaptureData = null;
 
-        // Отключаем контекстное меню в модальном окне
-        answerModal.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-        });
+        function updateGameField() {
+            console.log("gameState:", gameState);
+            if (!gameState || !gameState.grid || !gameState.players) {
+                console.error("gameState is invalid:", gameState);
+                return;
+            }
 
-        gameField.addEventListener('click', function(e) {
-            const td = e.target.closest('td');
-            if (!td || !td.classList.contains('available')) return;
+            const grid = document.getElementById("gameGrid");
+            grid.innerHTML = "";
+            for (let i = 0; i < 5; i++) {
+                for (let j = 0; j < 5; j++) {
+                    const cell = document.createElement("div");
+                    cell.className = "cell";
+                    const cellData = gameState.grid[i][j];
+                    const ownerId = cellData.ownerId;
+                    if (ownerId === 1) cell.classList.add("player1");
+                    else if (ownerId === 2) cell.classList.add("player2");
+                    else if (ownerId === 3) cell.classList.add("player3");
+                    else if (ownerId === 4) cell.classList.add("player4");
 
-            const x = parseInt(td.getAttribute('data-x'));
-            const y = parseInt(td.getAttribute('data-y'));
+                    const costText = document.createElement("div");
+                    costText.className = "cell-text";
+                    costText.textContent = `Стоимость: ${cellData.cost}`;
+                    cell.appendChild(costText);
 
+                    cell.addEventListener("click", () => {
+                        console.log(`Cell clicked: (${i}, ${j})`);
+                        moveToCell(i, j);
+                    });
+
+                    grid.appendChild(cell);
+                }
+            }
+
+            gameState.players.forEach(player => {
+                const cell = grid.children[player.x * 5 + player.y];
+                const playerDiv = document.createElement("div");
+                playerDiv.className = `player p${player.id}`;
+                cell.appendChild(playerDiv);
+            });
+
+            const currentPlayer = gameState.players.find(p => p.id === gameState.activePlayerId);
+            document.getElementById("playerName").textContent = currentPlayer ? currentPlayer.name : "Unknown";
+
+            const playersList = document.getElementById("playersList");
+            playersList.innerHTML = "";
+            gameState.players.forEach(player => {
+                const playerInfo = document.createElement("p");
+                playerInfo.textContent = `${player.name}: Монеты: ${player.coins}, Клетки: ${player.capturedCells} (X: ${player.x}, Y: ${player.y})`;
+                playersList.appendChild(playerInfo);
+            });
+
+            document.getElementById("gameOverMessage").textContent = gameState.gameOver ? gameState.winner : "";
+
+            setTimeout(() => {
+                document.getElementById("gameField").classList.add("show");
+                document.getElementById("playersListContainer").classList.add("show");
+            }, 100);
+
+            // Обновляем видимость модального окна с задачей
+            if (gameState.showTaskInput && gameState.timerActive) {
+                const taskModal = document.getElementById("taskModal");
+                taskModal.style.display = "flex";
+                setTimeout(() => {
+                    taskModal.querySelector('.modal-content').classList.add('show');
+                }, 10);
+            }
+        }
+
+        function moveToCell(newX, newY) {
             fetch('/Game/Move', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ playerId: currentPlayerId, direction: getDirection(x, y) })
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ playerId: activePlayerId, newX: newX, newY: newY })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     if (data.isOccupied) {
-                        doubleCost.textContent = data.doubleCost;
-                        originalCost.textContent = data.originalCost;
-                        captureModal.style.display = 'flex';
+                        currentCaptureData = data;
+                        const captureModal = document.getElementById("captureModal");
+                        const captureText = document.getElementById("captureText");
+                        captureText.textContent = `Эта клетка занята! Выберите: захватить за ${data.doubleCost} монет или взять более сложную задачу за ${data.originalCost} монет?`;
+                        captureModal.style.display = "flex";
+                        setTimeout(() => {
+                            captureModal.querySelector('.modal-content').classList.add('show');
+                        }, 10);
                     } else {
-                        coinCost.textContent = data.cost;
-                        spendCoinsModal.style.display = 'flex';
+                        spendCoins(data.cost);
                     }
+                    refreshGameState();
                 } else {
-                    alert(data.message || 'Нельзя туда пойти!');
+                    console.error("Move failed:", data.message);
                 }
             })
-            .catch(error => alert('Произошла ошибка при перемещении: ' + error.message));
-        });
-
-        function getDirection(x, y) {
-            const currentX = @Model.Players.First(p => p.Id == Model.ActivePlayerId).X;
-            const currentY = @Model.Players.First(p => p.Id == Model.ActivePlayerId).Y;
-            if (x === currentX - 1 && y === currentY) return 'left';
-            if (x === currentX + 1 && y === currentY) return 'right';
-            if (y === currentY - 1 && x === currentX) return 'up';
-            if (y === currentY + 1 && x === currentX) return 'down';
-            return '';
+            .catch(err => console.error("Move error:", err));
         }
 
-        spendYes.addEventListener('click', function() { spendCoins(true); });
-        spendNo.addEventListener('click', function() { spendCoins(false); });
+        function chooseCapture(useOriginalTask) {
+            const captureModal = document.getElementById("captureModal");
+            captureModal.style.display = "none";
+            captureCell(useOriginalTask);
+        }
 
-        function spendCoins(spend) {
+        function spendCoins(cost) {
             fetch('/Game/SpendCoins', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ playerId: currentPlayerId, spend: spend })
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ playerId: activePlayerId, spend: true })
             })
             .then(response => response.json())
             .then(data => {
-                spendCoinsModal.style.display = 'none';
-                if (data.success && spend) {
-                    taskText.textContent = data.task;
-                    timeLeft = 15; // Устанавливаем новый таймер
-                    timerDisplay.textContent = timeLeft;
-                    answerModal.style.display = 'flex';
-                    startTimer();
-                } else if (!data.success) {
-                    alert(data.message || 'Ошибка!');
-                    window.location.reload();
+                if (data.success) {
+                    if (data.task) {
+                        const taskModal = document.getElementById("taskModal");
+                        taskModal.style.display = "flex";
+                        document.getElementById("taskText").textContent = data.task;
+                        document.getElementById("taskAnswer").value = "";
+                        setTimeout(() => {
+                            taskModal.querySelector('.modal-content').classList.add('show');
+                        }, 10);
+                        let timeLeft = data.timeLimit;
+                        timerInterval = setInterval(() => {
+                            document.getElementById("timer").textContent = `Осталось: ${timeLeft} сек`;
+                            timeLeft--;
+                            if (timeLeft < 0) {
+                                clearInterval(timerInterval);
+                                taskModal.style.display = "none";
+                                const modalContent = taskModal.querySelector('.modal-content');
+                                modalContent.classList.add('timeout');
+                                setTimeout(timeout, 500);
+                            }
+                        }, 1000);
+                    } else {
+                        refreshGameState();
+                    }
                 } else {
-                    window.location.reload();
+                    console.error("SpendCoins failed:", data.message);
                 }
             })
-            .catch(error => alert('Произошла ошибка при обработке монет!'));
+            .catch(err => console.error("SpendCoins error:", err));
         }
-
-        captureOriginal.addEventListener('click', function() { captureCell(true); });
-        captureNew.addEventListener('click', function() { captureCell(false); });
-        captureCancel.addEventListener('click', function() {
-            captureModal.style.display = 'none';
-            window.location.reload();
-        });
 
         function captureCell(useOriginalTask) {
             fetch('/Game/CaptureCell', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ playerId: currentPlayerId, useOriginalTask: useOriginalTask })
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ playerId: activePlayerId, useOriginalTask: useOriginalTask })
             })
             .then(response => response.json())
             .then(data => {
-                captureModal.style.display = 'none';
                 if (data.success) {
-                    taskText.textContent = data.task;
-                    timeLeft = 15; // Новый таймер для захвата
-                    timerDisplay.textContent = timeLeft;
-                    answerModal.style.display = 'flex';
-                    startTimer();
+                    const taskModal = document.getElementById("taskModal");
+                    taskModal.style.display = "flex";
+                    document.getElementById("taskText").textContent = data.task;
+                    document.getElementById("taskAnswer").value = "";
+                    setTimeout(() => {
+                        taskModal.querySelector('.modal-content').classList.add('show');
+                    }, 10);
+                    let timeLeft = data.timeLimit;
+                    timerInterval = setInterval(() => {
+                        document.getElementById("timer").textContent = `Осталось: ${timeLeft} сек`;
+                        timeLeft--;
+                        if (timeLeft < 0) {
+                            clearInterval(timerInterval);
+                            taskModal.style.display = "none";
+                            const modalContent = taskModal.querySelector('.modal-content');
+                            modalContent.classList.add('timeout');
+                            setTimeout(timeout, 500);
+                        }
+                    }, 1000);
                 } else {
-                    alert(data.message || 'Ошибка при захвате!');
-                    window.location.reload();
+                    console.error("CaptureCell failed:", data.message);
                 }
             })
-            .catch(error => alert('Произошла ошибка при захвате клетки!'));
+            .catch(err => console.error("CaptureCell error:", err));
         }
 
-        submitAnswer.addEventListener('click', function() {
-            const answer = parseInt(answerInput.value);
-            if (isNaN(answer)) {
-                alert('Введите число!');
-                return;
-            }
-            clearInterval(timerInterval);
+        function submitAnswer() {
+            const answer = parseInt(document.getElementById("taskAnswer").value) || -1;
             fetch('/Game/SubmitAnswer', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ playerId: currentPlayerId, answer: answer })
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ playerId: activePlayerId, answer: answer })
             })
             .then(response => response.json())
             .then(data => {
-                answerModal.style.display = 'none';
-                if (data.success && !data.wasCorrect) {
-                    alert('Неверный ответ! Вы вернулись на предыдущую клетку, монеты сохранены, задача обновлена.');
-                }
-                window.location.reload();
-            })
-            .catch(error => alert('Произошла ошибка при отправке ответа!'));
-        });
-
-        function startTimer() {
-            timerInterval = setInterval(() => {
-                timeLeft--;
-                timerDisplay.textContent = timeLeft;
-                if (timeLeft <= 0) {
+                if (data.success) {
                     clearInterval(timerInterval);
-                    answerModal.style.display = 'none';
-                    fetch('/Game/Timeout', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ playerId: currentPlayerId })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert(data.message + ' Вы вернулись на предыдущую клетку, монеты сохранены, задача обновлена.');
-                            window.location.reload();
-                        }
-                    })
-                    .catch(error => alert('Ошибка при обработке таймаута!'));
+                    const taskModal = document.getElementById("taskModal");
+                    if (!data.wasCorrect) {
+                        const modalContent = taskModal.querySelector('.modal-content');
+                        modalContent.classList.add('wrong');
+                        setTimeout(() => {
+                            taskModal.style.display = "none";
+                            document.getElementById("taskAnswer").value = "";
+                            refreshGameState();
+                        }, 300);
+                    } else {
+                        taskModal.style.display = "none";
+                        document.getElementById("taskAnswer").value = "";
+                        const currentPlayer = gameState.players.find(p => p.id === activePlayerId);
+                        const cell = document.getElementById("gameGrid").children[currentPlayer.x * 5 + currentPlayer.y];
+                        cell.classList.add("captured");
+                        refreshGameState();
+                    }
+                } else {
+                    console.error("SubmitAnswer failed:", data.message);
                 }
-            }, 1000);
+            })
+            .catch(err => console.error("SubmitAnswer error:", err));
         }
+
+        function timeout() {
+            fetch('/Game/Timeout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ playerId: activePlayerId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    clearInterval(timerInterval);
+                    document.getElementById("taskModal").style.display = "none";
+                    document.getElementById("taskAnswer").value = "";
+                    refreshGameState();
+                } else {
+                    console.error("Timeout failed:", data.message);
+                }
+            })
+            .catch(err => console.error("Timeout error:", err));
+        }
+
+        function refreshGameState() {
+            fetch('/Game/Index')
+                .then(response => response.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const scriptContent = doc.querySelector('script').textContent;
+                    const gameStateMatch = scriptContent.match(/let gameState = (.*);/);
+                    const activePlayerMatch = scriptContent.match(/let activePlayerId = (.*);/);
+                    if (gameStateMatch && activePlayerMatch) {
+                        gameState = JSON.parse(gameStateMatch[1]);
+                        activePlayerId = parseInt(activePlayerMatch[1]);
+                        updateGameField();
+                    } else {
+                        console.error("Failed to parse game state or active player ID");
+                    }
+                })
+                .catch(err => console.error("Refresh error:", err));
+        }
+
+        function resetGame() {
+            fetch('/Game/Reset', {
+                method: 'POST'
+            })
+            .then(() => {
+                window.location.href = '/Home/Index';
+            })
+            .catch(err => console.error("Reset error:", err));
+        }
+
+        // Инициализация
+        updateGameField();
     </script>
 </body>
 </html>

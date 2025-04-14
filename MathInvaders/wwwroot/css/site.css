@@ -1,235 +1,270 @@
-/* Подключение Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-
-/* Основные стили */
 body {
-    font-family: 'Roboto', sans-serif;
-    background-color: #1a1a2e;
-    color: #e0e0e0;
-    margin: 0;
-    padding: 20px;
-}
-
-h1, h2, h3 {
-    color: #ff6f61;
+    background-color: #1e2a44;
+    color: white;
+    font-family: Arial, sans-serif;
     text-align: center;
 }
 
-.container {
-    max-width: 800px;
-    margin: 0 auto;
-    background-color: #16213e;
+h1 {
+    color: #e94560;
+    font-size: 48px;
+}
+
+.game-container {
+    margin-top: 20px;
+}
+
+.player-info {
+    font-size: 28px;
+    margin-bottom: 20px;
+}
+
+.game-field {
+    display: inline-block;
+    border: 2px solid #e94560;
     padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
 }
 
-/* Игровая таблица */
-.game-table {
-    border-collapse: collapse;
-    margin: 20px auto;
-    animation: fadeIn 1s ease-in;
+    .game-field.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(5, 80px);
+    gap: 5px;
 }
 
-    .game-table td {
-        width: 80px;
-        height: 80px;
-        text-align: center;
-        background-color: #0f3460;
-        border: 2px solid #e94560;
-        border-radius: 5px;
-        transition: transform 0.2s, background-color 0.3s;
-        cursor: pointer;
+.cell {
+    width: 80px;
+    height: 80px;
+    border: 1px solid #ccc;
+    position: relative;
+    font-size: 14px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.3s ease, box-shadow 0.2s ease;
+}
+
+    .cell:hover {
+        box-shadow: 0 0 10px rgba(233, 69, 96, 0.8);
     }
 
-        .game-table td:hover {
-            background-color: #1b4f72;
-            transform: scale(1.05);
-        }
-
-    .game-table .highlight {
-        animation: highlight 0.5s ease-out;
-        background-color: #ff6f61;
+    .cell.player1 {
+        background-color: #00ff00;
     }
 
-    .game-table .current-player-cell {
-        border: 3px solid #00ffcc;
-        box-shadow: 0 0 10px #00ffcc;
+    .cell.player2 {
+        background-color: #ff0000;
     }
 
-    .game-table .available {
-        border: 2px dashed #00ffcc;
-        background-color: #1b4f72;
+    .cell.player3 {
+        background-color: #0000ff;
     }
 
-    .game-table span {
-        display: block;
-        font-size: 14px;
+    .cell.player4 {
+        background-color: #ffff00;
     }
 
-    .game-table .player {
-        color: #ff6f61;
-        font-weight: bold;
+    .cell.captured {
+        animation: pulse 0.5s ease;
     }
 
-/* Модальные окна */
+.player {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: all 0.3s ease;
+}
+
+    .player.p1 {
+        background-color: #00ff00;
+    }
+
+    .player.p2 {
+        background-color: #ff0000;
+    }
+
+    .player.p3 {
+        background-color: #0000ff;
+    }
+
+    .player.p4 {
+        background-color: #ffff00;
+    }
+
+.game-over {
+    font-size: 32px;
+    color: #e94560;
+}
+
+.cell-text {
+    font-size: 12px;
+    word-wrap: break-word;
+}
+
+.players-list {
+    margin-top: 20px;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease 0.2s, transform 0.5s ease 0.2s;
+}
+
+    .players-list.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .players-list h3 {
+        font-size: 28px;
+    }
+
+    .players-list p {
+        font-size: 20px;
+    }
+
+.new-game-button {
+    background-color: #e94560;
+    color: white;
+    border: none;
+    padding: 15px 30px;
+    font-size: 20px;
+    cursor: pointer;
+    margin-top: 20px;
+    transition: transform 0.2s ease;
+}
+
+    .new-game-button:hover {
+        transform: scale(1.05);
+    }
+
 .modal {
     display: none;
     position: fixed;
-    top: 0;
+    z-index: 1;
     left: 0;
+    top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(0, 0, 0, 0.5);
     justify-content: center;
     align-items: center;
 }
 
 .modal-content {
-    background-color: #16213e;
+    background-color: #1e2a44;
     padding: 20px;
-    border-radius: 10px;
+    border: 1px solid #e94560;
+    width: 300px;
     text-align: center;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-    color: #e0e0e0;
+    color: white;
+    transform: scale(0);
+    transition: transform 0.3s ease;
 }
+
+    .modal-content.show {
+        transform: scale(1);
+    }
+
+    .modal-content.wrong {
+        animation: flash 0.3s ease;
+    }
+
+    .modal-content.timeout {
+        animation: shake 0.5s ease;
+    }
+
+    .modal-content p {
+        font-size: 20px;
+    }
+
+    .modal-content input {
+        font-size: 16px;
+        padding: 5px;
+        margin: 10px 0;
+    }
 
     .modal-content button {
-        padding: 10px 20px;
-        margin: 10px;
         background-color: #e94560;
+        color: white;
         border: none;
-        border-radius: 5px;
-        color: #fff;
+        padding: 10px 20px;
+        font-size: 16px;
         cursor: pointer;
-        transition: background-color 0.2s;
+        margin: 5px;
     }
 
-        .modal-content button:hover {
-            background-color: #ff6f61;
-        }
-
-    .modal-content input[type="number"] {
-        padding: 8px;
-        border: 1px solid #e94560;
-        border-radius: 5px;
-        background-color: #0f3460;
-        color: #e0e0e0;
-        margin: 10px 0;
+    .modal-content #timer {
+        margin-top: 10px;
+        font-size: 16px;
     }
 
-/* Список игроков */
-.players-list {
-    list-style: none;
-    padding: 0;
-    text-align: center;
+.capture-modal .modal-content {
+    width: 400px;
 }
 
-    .players-list li {
-        margin: 10px 0;
-        color: #a8d8ea;
-        transition: color 0.3s;
+    .capture-modal .modal-content p {
+        font-size: 18px;
     }
 
-    .players-list .current-player {
-        color: #00ffcc;
-        font-weight: bold;
-    }
-
-/* Сообщения */
-.message {
-    color: #ff6f61;
-    text-align: center;
-    font-weight: bold;
-}
-
-/* Таблица лидеров */
-.leaderboard {
-    border-collapse: collapse;
-    margin: 20px auto;
-    width: 80%;
-    background-color: #0f3460;
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-    .leaderboard th, .leaderboard td {
-        padding: 12px;
-        text-align: center;
-        border-bottom: 1px solid #e94560;
-    }
-
-    .leaderboard th {
-        background-color: #e94560;
-        color: #fff;
-        font-weight: bold;
-    }
-
-    .leaderboard td {
-        color: #e0e0e0;
-    }
-
-    .leaderboard tr:nth-child(even) {
-        background-color: #1b4f72;
-    }
-
-    .leaderboard tr:hover {
-        background-color: #ff6f61;
-        color: #fff;
-        transition: background-color 0.3s;
-    }
-
-/* Форма выбора класса */
-form {
-    text-align: center;
-    margin: 20px 0;
-}
-
-select {
-    padding: 10px;
-    border: 1px solid #e94560;
-    border-radius: 5px;
-    background-color: #0f3460;
-    color: #e0e0e0;
-    font-size: 16px;
-    margin-right: 10px;
-}
-
-input[type="submit"] {
-    padding: 10px 20px;
-    background-color: #e94560;
-    border: none;
-    border-radius: 5px;
-    color: #fff;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-    input[type="submit"]:hover {
-        background-color: #ff6f61;
-    }
-
-/* Анимации */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes highlight {
+@keyframes pulse {
     0% {
-        background-color: #ff6f61;
-        transform: scale(1.1);
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
     }
 
     100% {
-        background-color: #0f3460;
         transform: scale(1);
+    }
+}
+
+@keyframes flash {
+    0% {
+        background-color: #1e2a44;
+    }
+
+    50% {
+        background-color: #ff4040;
+    }
+
+    100% {
+        background-color: #1e2a44;
+    }
+}
+
+@keyframes shake {
+    0% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-10px);
+    }
+
+    50% {
+        transform: translateX(10px);
+    }
+
+    75% {
+        transform: translateX(-10px);
+    }
+
+    100% {
+        transform: translateX(0);
     }
 }

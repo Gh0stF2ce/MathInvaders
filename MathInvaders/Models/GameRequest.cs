@@ -5,7 +5,8 @@
         public class GameMoveRequest
         {
             public int PlayerId { get; set; }
-            public string Direction { get; set; }
+            public int NewX { get; set; }
+            public int NewY { get; set; }
         }
 
         public class GameSpendRequest

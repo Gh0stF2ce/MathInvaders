@@ -24,7 +24,7 @@ namespace MathInvaders.Controllers
                 return RedirectToAction("Index", "Home");
             }
             _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
-            return View(_gameState);
+            return View(new GameStateDto(_gameState));
         }
 
         [HttpPost]
@@ -63,24 +63,19 @@ namespace MathInvaders.Controllers
                 return Json(new { success = false, message = "Сейчас не ваш ход!" });
             }
 
-            if (!_gameState.CanMove(currentPlayer, request.Direction))
+            if (!_gameState.CanMove(currentPlayer, request.NewX, request.NewY))
             {
                 return Json(new { success = false, message = "Нельзя туда пойти!" });
             }
 
             _gameState.LastMovedCell = (currentPlayer.X, currentPlayer.Y);
-            switch (request.Direction.ToLower())
-            {
-                case "up": currentPlayer.Y--; break;
-                case "down": currentPlayer.Y++; break;
-                case "left": currentPlayer.X--; break;
-                case "right": currentPlayer.X++; break;
-            }
+            currentPlayer.X = request.NewX;
+            currentPlayer.Y = request.NewY;
+
             var cell = _gameState.Grid[currentPlayer.X, currentPlayer.Y];
             if (cell.OwnerId.HasValue && cell.OwnerId != currentPlayer.Id)
             {
                 int doubleCost = cell.OriginalCost * 2;
-                var (newTask, newAnswer) = GenerateTask(cell.Difficulty + 1);
                 return Json(new { success = true, isOccupied = true, doubleCost = doubleCost, originalCost = cell.OriginalCost });
             }
             return Json(new { success = true, cost = cell.Cost });
@@ -240,12 +235,14 @@ namespace MathInvaders.Controllers
             _gameState.CurrentAttemptCost = 0;
             _gameState.CurrentPlayerIndex = (_gameState.CurrentPlayerIndex + 1) % _gameState.Players.Count;
             _gameState.ActivePlayerId = _gameState.Players[_gameState.CurrentPlayerIndex].Id;
+
             return Json(new { success = true, message = "Время вышло!" });
         }
 
         [HttpPost]
         public IActionResult Reset()
         {
+            _gameState = new GameState();
             return RedirectToAction("Index", "Home");
         }
 
@@ -253,11 +250,12 @@ namespace MathInvaders.Controllers
         {
             var players = new List<Player>
             {
-                new Player { Id = 1, Name = "Player1", X = 0, Y = 0 },
-                new Player { Id = 2, Name = "Player2", X = 0, Y = size - 1 },
-                new Player { Id = 3, Name = "Player3", X = size - 1, Y = 0 },
-                new Player { Id = 4, Name = "Player4", X = size - 1, Y = size - 1 }
+                new Player { Id = 1, Name = "Player1", X = 0, Y = 0, Coins = 10 },
+                new Player { Id = 2, Name = "Player2", X = 0, Y = size - 1, Coins = 10 },
+                new Player { Id = 3, Name = "Player3", X = size - 1, Y = 0, Coins = 10 },
+                new Player { Id = 4, Name = "Player4", X = size - 1, Y = size - 1, Coins = 10 }
             };
+            _gameState.Players.Clear();
             _gameState.Players.AddRange(players);
 
             _gameState.Grid = new Cell[size, size];
@@ -286,7 +284,7 @@ namespace MathInvaders.Controllers
                 var startCell = _gameState.Grid[player.X, player.Y];
                 startCell.OwnerId = player.Id;
                 startCell.IsRevealed = true;
-                player.CapturedCells++;
+                player.CapturedCells = 1;
             }
 
             _gameState.CurrentPlayerIndex = 0;
@@ -320,50 +318,50 @@ namespace MathInvaders.Controllers
             {
                 switch (_gameState.ClassLevel)
                 {
-                    case 5: // 5 класс: простые операции
-                        int a5 = _random.Next(1, 20); // Числа до 20
-                        int b5 = _random.Next(1, 10); // Второе число до 10
+                    case 5:
+                        int a5 = _random.Next(1, 20);
+                        int b5 = _random.Next(1, 10);
                         switch (_random.Next(0, 4))
                         {
-                            case 0: return ($"{a5} + {b5} = ?", a5 + b5); // Сложение
-                            case 1: return ($"{a5} - {b5} = ?", a5 - b5); // Вычитание
-                            case 2: return ($"{a5} * {b5} = ?", a5 * b5); // Умножение на однозначное
+                            case 0: return ($"{a5} + {b5} = ?", a5 + b5);
+                            case 1: return ($"{a5} - {b5} = ?", a5 - b5);
+                            case 2: return ($"{a5} * {b5} = ?", a5 * b5);
                             case 3:
                                 int product5 = a5 * b5;
-                                return ($"{product5} / {b5} = ?", a5); // Деление без остатка
+                                return ($"{product5} / {b5} = ?", a5);
                             default: return ($"{a5} + {b5} = ?", a5 + b5);
                         }
 
-                    case 6: // 6 класс: двузначные числа и простые выражения
-                        int a6 = _random.Next(10, 50); // Числа от 10 до 50
-                        int b6 = _random.Next(5, 20);  // Второе число от 5 до 20
+                    case 6:
+                        int a6 = _random.Next(10, 50);
+                        int b6 = _random.Next(5, 20);
                         switch (_random.Next(0, 4))
                         {
-                            case 0: return ($"{a6} + {b6} = ?", a6 + b6); // Сложение
-                            case 1: return ($"{a6} - {b6} = ?", a6 - b6); // Вычитание
-                            case 2: return ($"{a6} * {b6} = ?", a6 * b6); // Умножение двузначных
+                            case 0: return ($"{a6} + {b6} = ?", a6 + b6);
+                            case 1: return ($"{a6} - {b6} = ?", a6 - b6);
+                            case 2: return ($"{a6} * {b6} = ?", a6 * b6);
                             case 3:
                                 int c6 = _random.Next(2, 10);
-                                return ($"{a6} * {c6} / {c6} = ?", a6); // Простое выражение
+                                return ($"{a6} * {c6} / {c6} = ?", a6);
                             default: return ($"{a6} + {b6} = ?", a6 + b6);
                         }
 
-                    case 7: // 7 класс: сложные выражения
-                        int a7 = _random.Next(20, 100); // Числа от 20 до 100
-                        int b7 = _random.Next(10, 50);  // Второе число от 10 до 50
-                        int c7 = _random.Next(2, 10);   // Третье число для выражений
+                    case 7:
+                        int a7 = _random.Next(20, 100);
+                        int b7 = _random.Next(10, 50);
+                        int c7 = _random.Next(2, 10);
                         switch (_random.Next(0, 4))
                         {
-                            case 0: return ($"{a7} + {b7} - {c7} = ?", a7 + b7 - c7); // Сложение и вычитание
-                            case 1: return ($"{a7} - {b7} + {c7} = ?", a7 - b7 + c7); // Вычитание и сложение
-                            case 2: return ($"{a7} * {c7} + {b7} = ?", a7 * c7 + b7); // Умножение и сложение
+                            case 0: return ($"{a7} + {b7} - {c7} = ?", a7 + b7 - c7);
+                            case 1: return ($"{a7} - {b7} + {c7} = ?", a7 - b7 + c7);
+                            case 2: return ($"{a7} * {c7} + {b7} = ?", a7 * c7 + b7);
                             case 3:
                                 int product7 = a7 * c7;
-                                return ($"{product7} / {c7} - {b7} = ?", a7 - b7); // Деление и вычитание
+                                return ($"{product7} / {c7} - {b7} = ?", a7 - b7);
                             default: return ($"{a7} + {b7} = ?", a7 + b7);
                         }
 
-                    default: // На случай ошибки
+                    default:
                         int a = _random.Next(1, 10 * difficulty);
                         int b = _random.Next(1, 10 * difficulty);
                         return ($"{a} + {b} = ?", a + b);
