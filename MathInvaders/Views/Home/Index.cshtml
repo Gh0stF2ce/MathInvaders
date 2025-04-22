@@ -11,6 +11,59 @@
     <title>@ViewData["Title"]</title>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
+    <style>
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: #1a1a2e;
+            color: white;
+        }
+
+        .navbar-brand a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .navbar-links {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+            .navbar-links a {
+                color: white;
+                text-decoration: none;
+            }
+
+                .navbar-links a:hover {
+                    color: #e94560;
+                }
+
+        .nav-button {
+            padding: 5px 10px;
+            background-color: #e94560;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+            .nav-button:hover {
+                background-color: #ff6f61;
+            }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -21,8 +74,14 @@
             <div class="navbar-links">
                 <a asp-controller="Home" asp-action="Index">Home</a>
                 <a asp-controller="Home" asp-action="Privacy">Privacy</a>
-                <a class="nav-button" asp-controller="Home" asp-action="Logout">Выход</a>
-                <a class="nav-button" asp-controller="Home" asp-action="Register">Регистрация</a>
+                <div id="authSection">
+                    <a class="nav-button" asp-controller="Account" asp-action="Login">Вход</a>
+                    <a class="nav-button" asp-controller="Account" asp-action="Register">Регистрация</a>
+                </div>
+                <div id="userSection" class="user-info" style="display: none;">
+                    <span id="userName"></span>
+                    <button class="nav-button" onclick="logout()">Выход</button>
+                </div>
             </div>
         </nav>
     </header>
@@ -53,113 +112,164 @@
     </footer>
 
     <script>
-        const connection = new signalR.HubConnectionBuilder()
-            .withUrl("/gameHub")
-            .configureLogging(signalR.LogLevel.Information)
-            .build();
+                const connection = new signalR.HubConnectionBuilder()
+                    .withUrl("/gameHub")
+                    .configureLogging(signalR.LogLevel.Information)
+                    .build();
 
-        let matchId = null;
-        let playerId = null;
-        let isReady = false;
-        // const urlParams = new URLSearchParams(window.location.search);
-        // const matchId = urlParams.get('matchId');
-        // let playerId = "@Model.PlayerId";
-        // let gameState = @Html.Raw(Json.Serialize(Model));
-        // let isReady = false;
+                let matchId = null;
+                let playerId = null;
+                let isReady = false;
+                let currentUser = null;
 
-        // Обработчик получения списка игроков
-        connection.on("PlayerJoined", (joinedPlayerId) => {
-            console.log(`Player ${joinedPlayerId} joined the match!`);
-            updatePlayersList();
-        });
-
-        // Обработчик обновления состояния готовности
-        connection.on("PlayerReadyStatus", (readyPlayerId, readyStatus) => {
-            console.log(`Player ${readyPlayerId} is ${readyStatus ? "ready" : "not ready"}`);
-            updatePlayersList();
-            checkAllReady();
-        });
-
-        // Обработчик получения состояния игры
-        connection.on("ReceiveGameState", (gameStateJson) => {
-            console.log("Received game state update:", gameStateJson);
-            try {
-                gameState = JSON.parse(gameStateJson);
-                updateGameField();
-            } catch (err) {
-                console.error("Error parsing game state:", err);
-            }
-        });
-
-        // Старт SignalR
-        connection.start().then(() => {
-            console.log("SignalR connected");
-            connection.invoke("JoinGame", matchId.toString(), playerId.toString())
-                .then(() => console.log(`Joined game: matchId=${matchId}, playerId=${playerId}`))
-                .catch(err => console.error("Error joining game:", err));
-        }).catch(err => console.error("SignalR connection error:", err));
-
-        document.getElementById("playButton").addEventListener("click", () => {
-            const classLevel = document.getElementById("classLevel").value;
-            fetch('/Game/CreateMatch', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ classLevel: parseInt(classLevel) })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    matchId = data.matchId;
-                    playerId = data.playerId;
-                    connection.invoke("JoinGame", matchId.toString(), playerId.toString());
-                    document.querySelector(".game-start").style.display = "none";
-                    document.getElementById("lobby").style.display = "block";
-                    updatePlayersList();
-                }
-            })
-            .catch(err => console.error("Error creating match:", err));
-        });
-
-        document.getElementById("readyButton").addEventListener("click", () => {
-            isReady = !isReady;
-            document.getElementById("readyButton").textContent = isReady ? "Не готов" : "Готов";
-            connection.invoke("PlayerReady", matchId.toString(), playerId.toString(), isReady)
-                .then(() => console.log(`PlayerReady invoked: ${playerId} is ${isReady ? "ready" : "not ready"}`))
-                .catch(err => console.error("Error invoking PlayerReady:", err));
-        });
-
-        function updatePlayersList() {
-            fetch(`/Game/GetMatchPlayers?matchId=${matchId}`)
-                .then(response => response.json())
-                .then(data => {
-                    console.log("Players list received:", data);
-                    const playersList = document.getElementById("playersList");
-                    playersList.innerHTML = "";
-                    data.players.forEach(player => {
-                        const playerInfo = document.createElement("p");
-                        playerInfo.textContent = `Игрок ${player.id}: ${player.isReady ? "Готов" : "Не готов"}`;
-                        playersList.appendChild(playerInfo);
-                    });
-                })
-                .catch(err => console.error("Error updating players list:", err));
-        }
-
-        function checkAllReady() {
-            fetch(`/Game/CheckAllReady?matchId=${matchId}`)
-                .then(response => response.json())
-                .then(data => {
-                    console.log("CheckAllReady result:", data);
-                    if (data.allReady) {
-                        console.log(`All players are ready, redirecting to /Game/Index?matchId=${matchId}`);
-                        window.location.href = `/Game/Index?matchId=${matchId}`;
+                // Загружаем данные пользователя из localStorage и проверяем TempData
+                window.onload = function() {
+                    console.log("Page loaded, checking for currentUser in localStorage...");
+                    const user = localStorage.getItem('currentUser');
+                    if (user) {
+                        currentUser = JSON.parse(user);
+                        document.getElementById('authSection').style.display = 'none';
+                        document.getElementById('userSection').style.display = 'flex';
+                        document.getElementById('userName').textContent = `Привет, ${currentUser.name}!`;
+                        console.log("User loaded from localStorage:", currentUser);
                     } else {
-                        console.log("Not all players are ready yet.");
+                        console.log("No user found in localStorage");
+                        // Проверяем TempData для данных после входа
+                        const userName = '@TempData["UserName"]';
+                        const userEmail = '@TempData["UserEmail"]';
+                        if (userName && userEmail && userName !== '') {
+                            currentUser = { name: userName, email: userEmail };
+                            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                            document.getElementById('authSection').style.display = 'none';
+                            document.getElementById('userSection').style.display = 'flex';
+                            document.getElementById('userName').textContent = `Привет, ${currentUser.name}!`;
+                            console.log("User loaded from TempData:", currentUser);
+                        }
                     }
-                })
-                .catch(err => console.error("Error checking ready status:", err));
-        }
+                };
+
+                function logout() {
+                    console.log("logout called");
+                    currentUser = null;
+                    localStorage.removeItem('currentUser');
+                    document.getElementById('authSection').style.display = 'flex';
+                    document.getElementById('userSection').style.display = 'none';
+                }
+
+                // SignalR handlers and game logic
+                connection.on("PlayerJoined", (joinedPlayerId) => {
+                    console.log(`Player ${joinedPlayerId} joined the match!`);
+                    updatePlayersList();
+                });
+
+                connection.on("PlayerReadyStatus", (readyPlayerId, readyStatus) => {
+                    console.log(`Player ${readyPlayerId} is ${readyStatus ? "ready" : "not ready"}`);
+                    updatePlayersList();
+                    checkAllReady();
+                });
+
+                connection.on("ReceiveGameState", (gameStateJson) => {
+                    console.log("Received game state update:", gameStateJson);
+                });
+
+                document.getElementById("playButton").addEventListener("click", () => {
+                    const classLevel = document.getElementById("classLevel").value;
+                    console.log("Creating match with classLevel:", classLevel);
+                    fetch('/Game/CreateMatch', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ classLevel: parseInt(classLevel), playerName: currentUser ? currentUser.name : 'Guest' })
+                    })
+                    .then(response => {
+                        console.log("CreateMatch response:", response);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log("CreateMatch data:", data);
+                        if (data.success) {
+                            matchId = data.matchId;
+                            playerId = data.playerId;
+                            console.log("Starting SignalR connection...");
+                            connection.start()
+                                .then(() => {
+                                    console.log("SignalR connected");
+                                    connection.invoke("JoinGame", matchId.toString(), playerId.toString())
+                                        .then(() => {
+                                            console.log(`Joined game: matchId=${matchId}, playerId=${playerId}`);
+                                            document.querySelector(".game-start").style.display = "none";
+                                            document.getElementById("lobby").style.display = "block";
+                                            updatePlayersList();
+                                        })
+                                        .catch(err => console.error("Error joining game:", err));
+                                })
+                                .catch(err => {
+                                    console.error("SignalR connection error:", err);
+                                    alert("Не удалось подключиться к серверу: " + err.message);
+                                });
+                        } else {
+                            alert('Не удалось создать матч: ' + data.message);
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Error creating match:", err);
+                        alert("Произошла ошибка при создании матча: " + err.message);
+                    });
+                });
+
+                document.getElementById("readyButton").addEventListener("click", () => {
+                    isReady = !isReady;
+                    document.getElementById("readyButton").textContent = isReady ? "Не готов" : "Готов";
+                    console.log(`PlayerReady: ${playerId} is ${isReady ? "ready" : "not ready"}`);
+                    connection.invoke("PlayerReady", matchId.toString(), playerId.toString(), isReady)
+                        .then(() => console.log(`PlayerReady invoked: ${playerId} is ${isReady ? "ready" : "not ready"}`))
+                        .catch(err => console.error("Error invoking PlayerReady:", err));
+                });
+
+                function updatePlayersList() {
+                    if (!matchId) {
+                        console.warn("matchId is not defined, cannot update players list");
+                        return;
+                    }
+                    fetch(`/Game/GetMatchPlayers?matchId=${matchId}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log("Players list received:", data);
+                            const playersList = document.getElementById("playersList");
+                            playersList.innerHTML = "";
+                            data.players.forEach(player => {
+                                const playerInfo = document.createโลย
+
+        .createElement("p");
+                                playerInfo.textContent = `Игрок ${player.id}: ${player.isReady ? "Готов" : "Не готов"}`;
+                                playersList.appendChild(playerInfo);
+                            });
+                        })
+                        .catch(err => console.error("Error updating players list:", err));
+                }
+
+                function checkAllReady() {
+                    if (!matchId) {
+                        console.warn("matchId is not defined, cannot check ready status");
+                        return;
+                    }
+                    fetch(`/Game/CheckAllReady?matchId=${matchId}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log("CheckAllReady result:", data);
+                            if (data.allReady) {
+                                console.log(`All players are ready, redirecting to /Game/Index?matchId=${matchId}&playerId=${playerId}`);
+                                window.location.href = `/Game/Index?matchId=${matchId}&playerId=${playerId}`;
+                            } else {
+                                console.log("Not all players are ready yet.");
+                            }
+                        })
+                        .catch(err => console.error("Error checking ready status:", err));
+                }
     </script>
 </body>
 </html>

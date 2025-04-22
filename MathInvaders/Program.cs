@@ -15,6 +15,7 @@ builder.Services.AddSession(options =>
 
 // Регистрируем GameService как singleton
 builder.Services.AddSingleton<GameService>();
+builder.Services.AddSingleton<UserService>();
 
 var app = builder.Build();
 

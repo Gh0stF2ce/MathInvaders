@@ -1,22 +1,215 @@
-﻿@{
-    ViewData["Title"] = "Вход";
+﻿@model MathInvaders.Models.LoginViewModel
+@{
+    ViewData["Title"] = "Вход - Math Invaders";
 }
-<div class="container">
-    <h1>Вход</h1>
-    <form asp-action="Login" method="post">
-        <div>
-            <label for="username">Имя пользователя:</label>
-            <input type="text" id="username" name="username" required />
-        </div>
-        <div>
-            <label for="password">Пароль:</label>
-            <input type="password" id="password" name="password" required />
-        </div>
-        @if (ViewBag.Error != null)
-        {
-            <p style="color: red;">@ViewBag.Error</p>
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.19.5/jquery.validate.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-validation-unobtrusive/3.2.12/jquery.validate.unobtrusive.min.js"></script>
+    <style>
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: #1a1a2e;
+            color: white;
         }
-        <input type="submit" value="Войти" />
-        <p>Нет аккаунта? <a asp-action="Register">Зарегистрироваться</a></p>
-    </form>
-</div>
+
+        .navbar-brand a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .navbar-links {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+            .navbar-links a {
+                color: white;
+                text-decoration: none;
+            }
+
+                .navbar-links a:hover {
+                    color: #e94560;
+                }
+
+        .nav-button {
+            padding: 5px 10px;
+            background-color: #e94560;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+            .nav-button:hover {
+                background-color: #ff6f61;
+            }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+        }
+
+        .form-container {
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #16213e;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+        }
+
+            .form-container h2 {
+                margin-bottom: 20px;
+            }
+
+            .form-container input {
+                width: 100%;
+                padding: 8px;
+                margin: 10px 0;
+                border: none;
+                border-radius: 5px;
+                box-sizing: border-box;
+            }
+
+            .form-container button {
+                padding: 8px 16px;
+                background-color: #e94560;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                margin: 10px 5px;
+            }
+
+                .form-container button:hover {
+                    background-color: #ff6f61;
+                }
+
+            .form-container .error-message {
+                color: #ff6f61;
+                margin-top: 10px;
+                display: block;
+                font-size: 0.9em;
+            }
+
+        .field-validation-error {
+            color: #ff6f61;
+            display: block;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <div class="navbar-brand">
+                <a asp-controller="Home" asp-action="Index">Math Invaders</a>
+            </div>
+            <div class="navbar-links">
+                <a asp-controller="Home" asp-action="Index">Home</a>
+                <a asp-controller="Home" asp-action="Privacy">Privacy</a>
+                <div id="authSection">
+                    <a class="nav-button" asp-controller="Account" asp-action="Login">Вход</a>
+                    <a class="nav-button" asp-controller="Account" asp-action="Register">Регистрация</a>
+                </div>
+                <div id="userSection" class="user-info" style="display: none;">
+                    <span id="userName"></span>
+                    <button class="nav-button" onclick="logout()">Выход</button>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <div class="form-container">
+        <h2>Вход</h2>
+        <form id="loginForm" asp-action="Login" method="post">
+            <div>
+                <input asp-for="Email" type="email" placeholder="Email" />
+                <span asp-validation-for="Email" class="field-validation-error"></span>
+            </div>
+            <div>
+                <input asp-for="Password" type="password" placeholder="Пароль" />
+                <span asp-validation-for="Password" class="field-validation-error"></span>
+            </div>
+            @if (ViewData["ErrorMessage"] != null)
+            {
+                <div class="error-message">@ViewData["ErrorMessage"]</div>
+            }
+            <button type="submit">Войти</button>
+            <a class="nav-button" asp-controller="Home" asp-action="Index">Назад</a>
+        </form>
+    </div>
+
+    <footer class="footer">
+        <p>© @DateTime.Now.Year - Math Invaders</p>
+    </footer>
+
+    <script>
+        let currentUser = null;
+
+        // Загружаем данные пользователя из localStorage при загрузке страницы
+        window.onload = function() {
+            console.log("Page loaded, checking for currentUser in localStorage...");
+            const user = localStorage.getItem('currentUser');
+            if (user) {
+                currentUser = JSON.parse(user);
+                document.getElementById('authSection').style.display = 'none';
+                document.getElementById('userSection').style.display = 'flex';
+                document.getElementById('userName').textContent = `Привет, ${currentUser.name}!`;
+                console.log("User loaded:", currentUser);
+            } else {
+                console.log("No user found in localStorage");
+            }
+        };
+
+        function logout() {
+            console.log("logout called");
+            currentUser = null;
+            localStorage.removeItem('currentUser');
+            window.location.href = '/Home/Index';
+        }
+
+        // Дополнительная клиентская валидация
+        $(document).ready(function () {
+            $("#loginForm").validate({
+                rules: {
+                    Email: {
+                        required: true,
+                        email: true
+                    },
+                    Password: {
+                        required: true
+                    }
+                },
+                messages: {
+                    Email: {
+                        required: "Email обязателен",
+                        email: "Введите корректный email"
+                    },
+                    Password: {
+                        required: "Пароль обязателен"
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
