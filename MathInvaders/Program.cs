@@ -1,32 +1,39 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
+using MathInvaders.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Добавляем сервисы
 builder.Services.AddControllersWithViews();
-
-builder.Services.AddCors(options =>
+builder.Services.AddSignalR();
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
 {
-    options.AddPolicy("AllowAll", builder =>
-    {
-        builder.AllowAnyOrigin()
-               .AllowAnyMethod()
-               .AllowAnyHeader()
-               .SetIsOriginAllowed(_ => true);
-    });
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
 });
+
+// Регистрируем GameService как singleton
+builder.Services.AddSingleton<GameService>();
 
 var app = builder.Build();
 
+// Настраиваем middleware
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
 }
 
+app.UseHttpsRedirection();
 app.UseStaticFiles();
+
 app.UseRouting();
-app.UseCors("AllowAll");
+
+app.UseSession();
 app.UseAuthorization();
+
+app.MapHub<MathInvaders.Hubs.GameHub>("/gameHub");
 
 app.MapControllerRoute(
     name: "default",

@@ -7,14 +7,15 @@
 <head>
     <title>Math Invaders - Игра</title>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>Math Invaders</h1>
+        <h1>Math Invaders (Матч #@Model.MatchId)</h1>
         <div class="game-container">
             <div class="player-info">
-                Текущий игрок: <strong id="playerName">@Model.Players.FirstOrDefault(p => p.Id == Model.ActivePlayerId)?.Name</strong>
-                (Active Player ID: @Model.ActivePlayerId)
+                Текущий игрок: <strong id="playerName" data-active-player-id="@Model.ActivePlayerId">@Model.Players.FirstOrDefault(p => p.Id == Model.ActivePlayerId)?.Name</strong>
+                (Active Player ID: <span id="activePlayerId">@Model.ActivePlayerId</span>)
             </div>
             <div class="game-field" id="gameField">
                 <div class="grid" id="gameGrid"></div>
@@ -49,33 +50,158 @@
 
     <script>
         let gameState = @Html.Raw(Json.Serialize(Model));
-        let activePlayerId = @Model.ActivePlayerId;
+        let activePlayerId = "@Model.PlayerId";
+        console.log("Initial gameState:", gameState);
+        console.log("Initial activePlayerId:", activePlayerId);
+        let matchId = @Model.MatchId;
         let timerInterval = null;
         let currentCaptureData = null;
 
-        function updateGameField() {
-            console.log("gameState:", gameState);
-            if (!gameState || !gameState.grid || !gameState.players) {
-                console.error("gameState is invalid:", gameState);
+        // Функция для преобразования ключей из camelCase в PascalCase
+        function toPascalCase(obj) {
+            if (Array.isArray(obj)) {
+                return obj.map(item => toPascalCase(item));
+            }
+            if (obj !== null && typeof obj === 'object') {
+                return Object.fromEntries(
+                    Object.entries(obj).map(([key, value]) => {
+                        const pascalKey = key.charAt(0).toUpperCase() + key.slice(1);
+                        return [pascalKey, toPascalCase(value)];
+                    })
+                );
+            }
+            return obj;
+        }
+
+        // Преобразуем начальный gameState
+        gameState = toPascalCase(gameState);
+        console.log("Transformed initial gameState:", gameState);
+
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/gameHub")
+            .configureLogging(signalR.LogLevel.Information)
+            .withAutomaticReconnect([0, 2000, 5000, 10000])
+            .build();
+
+        connection.on("ReceiveGameState", (gameStateJson) => {
+            console.log("Received game state update:", gameStateJson);
+            try {
+                let parsedState = JSON.parse(gameStateJson);
+                console.log("Parsed gameState:", parsedState);
+                // Преобразуем ключи в PascalCase
+                parsedState = toPascalCase(parsedState);
+                console.log("Transformed parsedState:", parsedState);
+                console.log("gameState has required fields - gameState:", !!parsedState, "Grid:", !!parsedState?.Grid, "Players:", !!parsedState?.Players);
+                updateGameField(parsedState);
+            } catch (err) {
+                console.error("Error parsing game state:", err);
+            }
+        });
+
+        connection.on("PlayerJoined", (playerId, playerName) => {
+            console.log(`Player joined: ${playerName} (ID: ${playerId})`);
+        });
+
+        connection.start().then(() => {
+            console.log("SignalR connected!");
+            connection.invoke("JoinGame", matchId.toString(), activePlayerId)
+                .then(() => console.log("JoinGame invoked successfully"))
+                .catch(err => console.error("Error invoking JoinGame:", err));
+        }).catch(err => console.error("SignalR connection error:", err));
+
+        connection.onreconnecting((error) => {
+            console.log("SignalR reconnecting due to error:", error);
+        });
+
+        connection.onreconnected((connectionId) => {
+            console.log("SignalR reconnected with connectionId:", connectionId);
+            connection.invoke("JoinGame", matchId.toString(), activePlayerId)
+                .then(() => console.log("JoinGame invoked successfully after reconnect"))
+                .catch(err => console.error("Error invoking JoinGame after reconnect:", err));
+        });
+
+        connection.onclose((error) => {
+            console.log("SignalR connection closed with error:", error);
+            setTimeout(() => {
+                connection.start().then(() => {
+                    console.log("SignalR reconnected!");
+                    connection.invoke("JoinGame", matchId.toString(), activePlayerId)
+                        .then(() => console.log("JoinGame invoked successfully after reconnect"))
+                        .catch(err => console.error("Error invoking JoinGame after reconnect:", err));
+                }).catch(err => console.error("SignalR reconnection error:", err));
+            }, 5000);
+        });
+
+        setInterval(() => {
+            console.log("SignalR connection state:", connection.state);
+            if (connection.state !== "Connected") {
+                console.log("Attempting to reconnect SignalR...");
+                connection.start().then(() => {
+                    console.log("SignalR reconnected!");
+                    connection.invoke("JoinGame", matchId.toString(), activePlayerId)
+                        .then(() => console.log("JoinGame invoked successfully after reconnect"))
+                        .catch(err => console.error("Error invoking JoinGame after reconnect:", err));
+                }).catch(err => console.error("SignalR reconnection error:", err));
+            }
+        }, 5000);
+
+        function updateGameField(localGameState) {
+            console.log("updateGameField called with gameState:", localGameState);
+
+            // Проверка на базовую валидность gameState
+            if (!localGameState) {
+                console.error("gameState is null or undefined:", localGameState);
+                return;
+            }
+            if (!localGameState.Grid) {
+                console.error("gameState.Grid is missing:", localGameState);
+                return;
+            }
+            if (!localGameState.Players || localGameState.Players.length === 0) {
+                console.error("gameState.Players is missing or empty:", localGameState);
                 return;
             }
 
+            // Обновляем глобальную переменную gameState только после проверки
+            gameState = localGameState;
+
+            // Проверка на наличие ActivePlayerId
+            if (!gameState.ActivePlayerId) {
+                console.warn("gameState.ActivePlayerId is missing:", gameState);
+            }
+
             const grid = document.getElementById("gameGrid");
+            if (!grid) {
+                console.error("gameGrid element not found");
+                return;
+            }
+            console.log("Clearing game grid");
             grid.innerHTML = "";
+
+            console.log("Rendering grid...");
             for (let i = 0; i < 5; i++) {
                 for (let j = 0; j < 5; j++) {
                     const cell = document.createElement("div");
                     cell.className = "cell";
-                    const cellData = gameState.grid[i][j];
-                    const ownerId = cellData.ownerId;
-                    if (ownerId === 1) cell.classList.add("player1");
-                    else if (ownerId === 2) cell.classList.add("player2");
-                    else if (ownerId === 3) cell.classList.add("player3");
-                    else if (ownerId === 4) cell.classList.add("player4");
+                    const cellData = gameState.Grid[i][j];
+                    if (!cellData) {
+                        console.warn(`Cell data missing at position (${i}, ${j}):`, gameState.Grid);
+                        const costText = document.createElement("div");
+                        costText.className = "cell-text";
+                        costText.textContent = "Стоимость: N/A";
+                        cell.appendChild(costText);
+                        grid.appendChild(cell);
+                        continue;
+                    }
+                    const ownerId = cellData.OwnerId;
+                    if (ownerId === gameState.Players[0].Id) cell.classList.add("player1");
+                    else if (gameState.Players[1] && ownerId === gameState.Players[1].Id) cell.classList.add("player2");
+                    else if (gameState.Players[2] && ownerId === gameState.Players[2].Id) cell.classList.add("player3");
+                    else if (gameState.Players[3] && ownerId === gameState.Players[3].Id) cell.classList.add("player4");
 
                     const costText = document.createElement("div");
                     costText.className = "cell-text";
-                    costText.textContent = `Стоимость: ${cellData.cost}`;
+                    costText.textContent = `Стоимость: ${cellData.Cost !== undefined ? cellData.Cost : "N/A"}`;
                     cell.appendChild(costText);
 
                     cell.addEventListener("click", () => {
@@ -87,38 +213,102 @@
                 }
             }
 
-            gameState.players.forEach(player => {
-                const cell = grid.children[player.x * 5 + player.y];
+            console.log("Rendering players...");
+            gameState.Players.forEach(player => {
+                console.log(`Rendering player: ${player.Name} at position (${player.X}, ${player.Y})`);
+                if (player.X < 0 || player.X >= 5 || player.Y < 0 || player.Y >= 5) {
+                    console.warn(`Invalid player position: (${player.X}, ${player.Y}) for player ${player.Name}`);
+                    return;
+                }
+                const cell = grid.children[player.X * 5 + player.Y];
+                if (!cell) {
+                    console.warn(`Cell not found for player position: (${player.X}, ${player.Y}) for player ${player.Name}`);
+                    return;
+                }
                 const playerDiv = document.createElement("div");
-                playerDiv.className = `player p${player.id}`;
+                playerDiv.className = `player p${gameState.Players.indexOf(player) + 1}`;
                 cell.appendChild(playerDiv);
             });
 
-            const currentPlayer = gameState.players.find(p => p.id === gameState.activePlayerId);
-            document.getElementById("playerName").textContent = currentPlayer ? currentPlayer.name : "Unknown";
+            console.log("Updating current player...");
+            const currentPlayer = gameState.Players.find(p => p.Id === gameState.ActivePlayerId);
+            console.log("Current player:", currentPlayer);
+            const playerNameElement = document.getElementById("playerName");
+            if (playerNameElement) {
+                playerNameElement.textContent = currentPlayer ? currentPlayer.Name : "Unknown";
+                playerNameElement.setAttribute("data-active-player-id", gameState.ActivePlayerId || "");
+            } else {
+                console.warn("playerName element not found");
+            }
 
+            console.log("Updating players list...");
             const playersList = document.getElementById("playersList");
+            if (!playersList) {
+                console.warn("playersList element not found");
+                return;
+            }
             playersList.innerHTML = "";
-            gameState.players.forEach(player => {
+            gameState.Players.forEach(player => {
                 const playerInfo = document.createElement("p");
-                playerInfo.textContent = `${player.name}: Монеты: ${player.coins}, Клетки: ${player.capturedCells} (X: ${player.x}, Y: ${player.y})`;
+                playerInfo.textContent = `${player.Name}: Монеты: ${player.Coins}, Клетки: ${player.CapturedCells} (X: ${player.X}, Y: ${player.Y})`;
                 playersList.appendChild(playerInfo);
             });
 
-            document.getElementById("gameOverMessage").textContent = gameState.gameOver ? gameState.winner : "";
+            console.log("Updating game over message...");
+            const gameOverMessage = document.getElementById("gameOverMessage");
+            if (gameOverMessage) {
+                gameOverMessage.textContent = gameState.GameOver ? gameState.Winner : "";
+            } else {
+                console.warn("gameOverMessage element not found");
+            }
 
+            console.log("Showing game field and players list...");
+            const gameField = document.getElementById("gameField");
+            const playersListContainer = document.getElementById("playersListContainer");
             setTimeout(() => {
-                document.getElementById("gameField").classList.add("show");
-                document.getElementById("playersListContainer").classList.add("show");
+                if (gameField) {
+                    console.log("Adding 'show' class to gameField");
+                    gameField.classList.add("show");
+                } else {
+                    console.warn("gameField element not found");
+                }
+                if (playersListContainer) {
+                    console.log("Adding 'show' class to playersListContainer");
+                    playersListContainer.classList.add("show");
+                } else {
+                    console.warn("playersListContainer element not found");
+                }
             }, 100);
 
-            // Обновляем видимость модального окна с задачей
-            if (gameState.showTaskInput && gameState.timerActive) {
-                const taskModal = document.getElementById("taskModal");
-                taskModal.style.display = "flex";
-                setTimeout(() => {
-                    taskModal.querySelector('.modal-content').classList.add('show');
-                }, 10);
+            // Показываем модальное окно с задачей только активному игроку
+            const taskModal = document.getElementById("taskModal");
+            if (gameState.ShowTaskInput && gameState.TimerActive && activePlayerId === gameState.ActivePlayerId) {
+                console.log("Showing task modal for active player:", activePlayerId);
+                if (taskModal) {
+                    taskModal.style.display = "flex";
+                    const taskText = document.getElementById("taskText");
+                    if (taskText) {
+                        taskText.textContent = gameState.Task || "Задача не загружена";
+                    } else {
+                        console.warn("taskText element not found");
+                    }
+                    setTimeout(() => {
+                        const modalContent = taskModal.querySelector('.modal-content');
+                        if (modalContent) {
+                            modalContent.classList.add("show");
+                        } else {
+                            console.warn("modal-content element not found");
+                        }
+                    }, 10);
+                } else {
+                    console.warn("taskModal element not found");
+                }
+            } else {
+                // Скрываем модальное окно для неактивных игроков
+                if (taskModal) {
+                    console.log("Hiding task modal for non-active player:", activePlayerId);
+                    taskModal.style.display = "none";
+                }
             }
         }
 
@@ -128,12 +318,12 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ playerId: activePlayerId, newX: newX, newY: newY })
+                body: JSON.stringify({ matchId: matchId, playerId: activePlayerId, newX: newX, newY: newY })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    if (data.isOccupied) {
+                    if (data.isoccupied) {
                         currentCaptureData = data;
                         const captureModal = document.getElementById("captureModal");
                         const captureText = document.getElementById("captureText");
@@ -145,7 +335,6 @@
                     } else {
                         spendCoins(data.cost);
                     }
-                    refreshGameState();
                 } else {
                     console.error("Move failed:", data.message);
                 }
@@ -165,7 +354,7 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ playerId: activePlayerId, spend: true })
+                body: JSON.stringify({ matchId: matchId, playerId: activePlayerId, spend: true })
             })
             .then(response => response.json())
             .then(data => {
@@ -190,8 +379,6 @@
                                 setTimeout(timeout, 500);
                             }
                         }, 1000);
-                    } else {
-                        refreshGameState();
                     }
                 } else {
                     console.error("SpendCoins failed:", data.message);
@@ -206,7 +393,7 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ playerId: activePlayerId, useOriginalTask: useOriginalTask })
+                body: JSON.stringify({ matchId: matchId, playerId: activePlayerId, useOriginalTask: useOriginalTask })
             })
             .then(response => response.json())
             .then(data => {
@@ -244,7 +431,7 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ playerId: activePlayerId, answer: answer })
+                body: JSON.stringify({ matchId: matchId, playerId: activePlayerId, answer: answer })
             })
             .then(response => response.json())
             .then(data => {
@@ -257,15 +444,13 @@
                         setTimeout(() => {
                             taskModal.style.display = "none";
                             document.getElementById("taskAnswer").value = "";
-                            refreshGameState();
                         }, 300);
                     } else {
                         taskModal.style.display = "none";
                         document.getElementById("taskAnswer").value = "";
-                        const currentPlayer = gameState.players.find(p => p.id === activePlayerId);
-                        const cell = document.getElementById("gameGrid").children[currentPlayer.x * 5 + currentPlayer.y];
+                        const currentPlayer = gameState.Players.find(p => p.Id === activePlayerId);
+                        const cell = document.getElementById("gameGrid").children[currentPlayer.X * 5 + currentPlayer.Y];
                         cell.classList.add("captured");
-                        refreshGameState();
                     }
                 } else {
                     console.error("SubmitAnswer failed:", data.message);
@@ -280,7 +465,7 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ playerId: activePlayerId })
+                body: JSON.stringify({ matchId: matchId, playerId: activePlayerId })
             })
             .then(response => response.json())
             .then(data => {
@@ -288,7 +473,6 @@
                     clearInterval(timerInterval);
                     document.getElementById("taskModal").style.display = "none";
                     document.getElementById("taskAnswer").value = "";
-                    refreshGameState();
                 } else {
                     console.error("Timeout failed:", data.message);
                 }
@@ -296,38 +480,19 @@
             .catch(err => console.error("Timeout error:", err));
         }
 
-        function refreshGameState() {
-            fetch('/Game/Index')
-                .then(response => response.text())
-                .then(html => {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');
-                    const scriptContent = doc.querySelector('script').textContent;
-                    const gameStateMatch = scriptContent.match(/let gameState = (.*);/);
-                    const activePlayerMatch = scriptContent.match(/let activePlayerId = (.*);/);
-                    if (gameStateMatch && activePlayerMatch) {
-                        gameState = JSON.parse(gameStateMatch[1]);
-                        activePlayerId = parseInt(activePlayerMatch[1]);
-                        updateGameField();
-                    } else {
-                        console.error("Failed to parse game state or active player ID");
-                    }
-                })
-                .catch(err => console.error("Refresh error:", err));
-        }
-
         function resetGame() {
             fetch('/Game/Reset', {
                 method: 'POST'
             })
             .then(() => {
+                connection.invoke("LeaveGame", matchId.toString());
                 window.location.href = '/Home/Index';
             })
             .catch(err => console.error("Reset error:", err));
         }
 
         // Инициализация
-        updateGameField();
+        updateGameField(gameState);
     </script>
 </body>
 </html>

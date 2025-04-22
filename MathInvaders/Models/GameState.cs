@@ -2,60 +2,66 @@
 {
     public class GameState
     {
+        public int MatchId { get; set; }
         public List<Player> Players { get; set; } = new List<Player>();
         public Cell[,] Grid { get; set; }
         public int ClassLevel { get; set; }
         public int CurrentPlayerIndex { get; set; }
-        public int ActivePlayerId { get; set; }
+        public string ActivePlayerId { get; set; }
         public bool GameOver { get; set; }
-        public string? Winner { get; set; }
+        public string Winner { get; set; }
         public bool ShowTaskInput { get; set; }
         public bool TimerActive { get; set; }
         public (int X, int Y)? LastMovedCell { get; set; }
         public int CurrentAttemptCost { get; set; }
-        public List<int> UsedHardTaskIndices { get; set; } = new List<int>();
+        public List<int> UsedHardTaskIndices { get; set; }
+
+        public bool CanMove(Player player, int newX, int newY)
+        {
+            if (newX < 0 || newX >= Grid.GetLength(0) || newY < 0 || newY >= Grid.GetLength(1))
+                return false;
+            int dx = Math.Abs(player.X - newX);
+            int dy = Math.Abs(player.Y - newY);
+            return (dx == 1 && dy == 0) || (dx == 0 && dy == 1);
+        }
 
         public void CheckGameOver()
         {
-            int totalCells = 25;
+            int totalCells = Grid.GetLength(0) * Grid.GetLength(1);
             foreach (var player in Players)
             {
-                if (player.CapturedCells > totalCells / 2)
+                if (player.CapturedCells >= totalCells / 2)
                 {
                     GameOver = true;
-                    Winner = $"Игрок {player.Name} победил!";
-                    return;
+                    Winner = $"{player.Name} победил!";
+                    break;
                 }
             }
 
-            bool allCellsCaptured = true;
-            for (int i = 0; i < 5; i++)
+            if (!GameOver)
             {
-                for (int j = 0; j < 5; j++)
+                bool allCellsCaptured = true;
+                for (int i = 0; i < Grid.GetLength(0); i++)
                 {
-                    if (!Grid[i, j].OwnerId.HasValue)
+                    for (int j = 0; j < Grid.GetLength(1); j++)
                     {
-                        allCellsCaptured = false;
-                        break;
+                        // Исправляем проверку
+                        if (string.IsNullOrEmpty(Grid[i, j].OwnerId))
+                        {
+                            allCellsCaptured = false;
+                            break;
+                        }
                     }
+                    if (!allCellsCaptured) break;
+                }
+
+                if (allCellsCaptured)
+                {
+                    GameOver = true;
+                    var winner = Players.OrderByDescending(p => p.CapturedCells).First();
+                    Winner = $"{winner.Name} победил с {winner.CapturedCells} клетками!";
                 }
             }
-
-            if (allCellsCaptured)
-            {
-                var winner = Players.OrderByDescending(p => p.CapturedCells).First();
-                GameOver = true;
-                Winner = $"Игрок {winner.Name} победил с {winner.CapturedCells} клетками!";
-            }
-        }
-        public bool CanMove(Player player, int newX, int newY)
-        {
-            if (newX < 0 || newX >= 5 || newY < 0 || newY >= 5)
-                return false;
-
-            int dx = Math.Abs(newX - player.X);
-            int dy = Math.Abs(newY - player.Y);
-            return (dx == 1 && dy == 0) || (dx == 0 && dy == 1); // Только соседние клетки
         }
     }
 }

@@ -2,22 +2,26 @@
 {
     public class GameStateDto
     {
+        public int MatchId { get; set; }
         public List<Player> Players { get; set; }
         public List<List<Cell>> Grid { get; set; }
         public int ClassLevel { get; set; }
         public int CurrentPlayerIndex { get; set; }
-        public int ActivePlayerId { get; set; }
+        public string ActivePlayerId { get; set; }
         public bool GameOver { get; set; }
-        public string? Winner { get; set; }
+        public string Winner { get; set; }
         public bool ShowTaskInput { get; set; }
         public bool TimerActive { get; set; }
         public (int X, int Y)? LastMovedCell { get; set; }
         public int CurrentAttemptCost { get; set; }
         public List<int> UsedHardTaskIndices { get; set; }
+        public string PlayerId { get; set; }
 
-        public GameStateDto(GameState gameState)
+        public GameStateDto(GameState gameState, string playerId)
         {
+            MatchId = gameState.MatchId;
             Players = gameState.Players;
+            PlayerId = playerId;
             ClassLevel = gameState.ClassLevel;
             CurrentPlayerIndex = gameState.CurrentPlayerIndex;
             ActivePlayerId = gameState.ActivePlayerId;

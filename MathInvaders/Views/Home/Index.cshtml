@@ -1,66 +1,165 @@
-﻿@{
+﻿@model MathInvaders.Models.HomeViewModel
+@{
     ViewData["Title"] = "Math Invaders - Главная";
 }
+
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <title>Math Invaders</title>
-    <link rel="stylesheet" href="~/css/site.css" />
-    <style>
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .auth-buttons {
-            margin-right: 20px;
-        }
-
-            .auth-buttons a {
-                margin-left: 10px;
-                text-decoration: none;
-                padding: 5px 10px;
-                border: 1px solid #e94560;
-                border-radius: 5px;
-                color: #e94560;
-            }
-
-                .auth-buttons a:hover {
-                    background-color: #e94560;
-                    color: white;
-                }
-    </style>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Math Invaders</h1>
-            <div class="auth-buttons">
-                @if (User.Identity.IsAuthenticated)
-                {
-                    <span>Привет, @User.Identity.Name!</span>
-                    <form asp-controller="Account" asp-action="Logout" method="post" style="display: inline;">
-                        <button type="submit" style="margin-left: 10px;">Выйти</button>
-                    </form>
-                }
-                else
-                {
-                    <a asp-controller="Account" asp-action="Login">Вход</a>
-                    <a asp-controller="Account" asp-action="Register">Регистрация</a>
-                }
+    <header>
+        <nav class="navbar">
+            <div class="navbar-brand">
+                <a asp-controller="Home" asp-action="Index">Math Invaders</a>
             </div>
-        </div>
-        <p>Добро пожаловать в математическую игру на захват территорий!</p>
-        <form asp-controller="Game" asp-action="StartGame" method="post">
+            <div class="navbar-links">
+                <a asp-controller="Home" asp-action="Index">Home</a>
+                <a asp-controller="Home" asp-action="Privacy">Privacy</a>
+                <a class="nav-button" asp-controller="Home" asp-action="Logout">Выход</a>
+                <a class="nav-button" asp-controller="Home" asp-action="Register">Регистрация</a>
+            </div>
+        </nav>
+    </header>
+
+    <main class="main-content">
+        <h1>Math Invaders</h1>
+        <p class="welcome-text">Добро пожаловать в математическую игру на захват территории!</p>
+
+        <div class="game-start">
             <label for="classLevel">Выберите класс:</label>
-            <select name="classLevel" id="classLevel">
+            <select id="classLevel" name="classLevel" class="class-select">
                 <option value="5">5 класс</option>
                 <option value="6">6 класс</option>
                 <option value="7">7 класс</option>
             </select>
-            <input type="submit" value="Начать игру" />
-        </form>
-    </div>
+            <button id="playButton" class="start-button">Играть</button>
+        </div>
+
+        <div id="lobby" style="display: none;">
+            <h2>Ожидание игроков...</h2>
+            <div id="playersList"></div>
+            <button id="readyButton" class="start-button">Готов</button>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>© @DateTime.Now.Year - Math Invaders</p>
+    </footer>
+
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/gameHub")
+            .configureLogging(signalR.LogLevel.Information)
+            .build();
+
+        let matchId = null;
+        let playerId = null;
+        let isReady = false;
+        // const urlParams = new URLSearchParams(window.location.search);
+        // const matchId = urlParams.get('matchId');
+        // let playerId = "@Model.PlayerId";
+        // let gameState = @Html.Raw(Json.Serialize(Model));
+        // let isReady = false;
+
+        // Обработчик получения списка игроков
+        connection.on("PlayerJoined", (joinedPlayerId) => {
+            console.log(`Player ${joinedPlayerId} joined the match!`);
+            updatePlayersList();
+        });
+
+        // Обработчик обновления состояния готовности
+        connection.on("PlayerReadyStatus", (readyPlayerId, readyStatus) => {
+            console.log(`Player ${readyPlayerId} is ${readyStatus ? "ready" : "not ready"}`);
+            updatePlayersList();
+            checkAllReady();
+        });
+
+        // Обработчик получения состояния игры
+        connection.on("ReceiveGameState", (gameStateJson) => {
+            console.log("Received game state update:", gameStateJson);
+            try {
+                gameState = JSON.parse(gameStateJson);
+                updateGameField();
+            } catch (err) {
+                console.error("Error parsing game state:", err);
+            }
+        });
+
+        // Старт SignalR
+        connection.start().then(() => {
+            console.log("SignalR connected");
+            connection.invoke("JoinGame", matchId.toString(), playerId.toString())
+                .then(() => console.log(`Joined game: matchId=${matchId}, playerId=${playerId}`))
+                .catch(err => console.error("Error joining game:", err));
+        }).catch(err => console.error("SignalR connection error:", err));
+
+        document.getElementById("playButton").addEventListener("click", () => {
+            const classLevel = document.getElementById("classLevel").value;
+            fetch('/Game/CreateMatch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ classLevel: parseInt(classLevel) })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    matchId = data.matchId;
+                    playerId = data.playerId;
+                    connection.invoke("JoinGame", matchId.toString(), playerId.toString());
+                    document.querySelector(".game-start").style.display = "none";
+                    document.getElementById("lobby").style.display = "block";
+                    updatePlayersList();
+                }
+            })
+            .catch(err => console.error("Error creating match:", err));
+        });
+
+        document.getElementById("readyButton").addEventListener("click", () => {
+            isReady = !isReady;
+            document.getElementById("readyButton").textContent = isReady ? "Не готов" : "Готов";
+            connection.invoke("PlayerReady", matchId.toString(), playerId.toString(), isReady)
+                .then(() => console.log(`PlayerReady invoked: ${playerId} is ${isReady ? "ready" : "not ready"}`))
+                .catch(err => console.error("Error invoking PlayerReady:", err));
+        });
+
+        function updatePlayersList() {
+            fetch(`/Game/GetMatchPlayers?matchId=${matchId}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Players list received:", data);
+                    const playersList = document.getElementById("playersList");
+                    playersList.innerHTML = "";
+                    data.players.forEach(player => {
+                        const playerInfo = document.createElement("p");
+                        playerInfo.textContent = `Игрок ${player.id}: ${player.isReady ? "Готов" : "Не готов"}`;
+                        playersList.appendChild(playerInfo);
+                    });
+                })
+                .catch(err => console.error("Error updating players list:", err));
+        }
+
+        function checkAllReady() {
+            fetch(`/Game/CheckAllReady?matchId=${matchId}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("CheckAllReady result:", data);
+                    if (data.allReady) {
+                        console.log(`All players are ready, redirecting to /Game/Index?matchId=${matchId}`);
+                        window.location.href = `/Game/Index?matchId=${matchId}`;
+                    } else {
+                        console.log("Not all players are ready yet.");
+                    }
+                })
+                .catch(err => console.error("Error checking ready status:", err));
+        }
+    </script>
 </body>
 </html>
