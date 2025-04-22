@@ -7,7 +7,7 @@
         public List<List<Cell>> Grid { get; set; }
         public int ClassLevel { get; set; }
         public int CurrentPlayerIndex { get; set; }
-        public string ActivePlayerId { get; set; }
+        //public string ActivePlayerId { get; set; }
         public bool GameOver { get; set; }
         public string Winner { get; set; }
         public bool ShowTaskInput { get; set; }
@@ -24,7 +24,7 @@
             PlayerId = playerId;
             ClassLevel = gameState.ClassLevel;
             CurrentPlayerIndex = gameState.CurrentPlayerIndex;
-            ActivePlayerId = gameState.ActivePlayerId;
+            //ActivePlayerId = gameState.ActivePlayerId;
             GameOver = gameState.GameOver;
             Winner = gameState.Winner;
             ShowTaskInput = gameState.ShowTaskInput;

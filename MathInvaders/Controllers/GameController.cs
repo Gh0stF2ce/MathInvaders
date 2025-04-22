@@ -16,6 +16,7 @@ namespace MathInvaders.Controllers
         private readonly IWebHostEnvironment _env;
         private static int _matchCounter = 0;
         private readonly GameService _gameService;
+        private static readonly object _lock = new object();
 
         public GameController(GameService gameService, IWebHostEnvironment env)
         {
@@ -176,15 +177,15 @@ namespace MathInvaders.Controllers
             }
 
             var gameState = _gameService.Games[request.MatchId];
-            if (gameState.GameOver || gameState.ShowTaskInput)
+            if (gameState.GameOver)
             {
-                return Json(new { success = false, message = "Игра окончена или сейчас не время ходить!" });
+                return Json(new { success = false, message = "Игра окончена!" });
             }
 
             var currentPlayer = gameState.Players.FirstOrDefault(p => p.Id == request.PlayerId);
-            if (currentPlayer == null || gameState.ActivePlayerId != request.PlayerId)
+            if (currentPlayer == null)
             {
-                return Json(new { success = false, message = "Сейчас не ваш ход!" });
+                return Json(new { success = false, message = "Игрок не найден!" });
             }
 
             if (!gameState.CanMove(currentPlayer, request.NewX, request.NewY))
@@ -192,20 +193,28 @@ namespace MathInvaders.Controllers
                 return Json(new { success = false, message = "Нельзя туда пойти!" });
             }
 
-            gameState.LastMovedCell = (currentPlayer.X, currentPlayer.Y);
-            currentPlayer.X = request.NewX;
-            currentPlayer.Y = request.NewY;
-
-            var cell = gameState.Grid[currentPlayer.X, currentPlayer.Y];
-            if (!string.IsNullOrEmpty(cell.OwnerId) && cell.OwnerId != currentPlayer.Id)
+            JsonResult result;
+            lock (_gameService.Games) // Синхронизация для изменения состояния
             {
-                int doubleCost = cell.OriginalCost * 2;
-                return Json(new { success = true, isOccupied = true, doubleCost = doubleCost, originalCost = cell.OriginalCost });
+                gameState.LastMovedCell = (currentPlayer.X, currentPlayer.Y);
+                currentPlayer.X = request.NewX;
+                currentPlayer.Y = request.NewY;
+
+                var cell = gameState.Grid[currentPlayer.X, currentPlayer.Y];
+                if (!string.IsNullOrEmpty(cell.OwnerId) && cell.OwnerId != currentPlayer.Id)
+                {
+                    int doubleCost = cell.OriginalCost * 2;
+                    result = Json(new { success = true, isOccupied = true, doubleCost = doubleCost, originalCost = cell.OriginalCost });
+                }
+                else
+                {
+                    result = Json(new { success = true, cost = cell.Cost });
+                }
             }
 
-            // Передаём request.PlayerId в SendGameStateUpdate
+            // Вызываем SendGameStateUpdate после выхода из lock
             await SendGameStateUpdate(request.MatchId, gameState, request.PlayerId);
-            return Json(new { success = true, cost = cell.Cost });
+            return result;
         }
 
         [HttpPost]
@@ -217,42 +226,36 @@ namespace MathInvaders.Controllers
             }
 
             var gameState = _gameService.Games[request.MatchId];
-            if (gameState.GameOver || gameState.ShowTaskInput)
+            if (gameState.GameOver)
             {
-                return Json(new { success = false, message = "Игра окончена или сейчас не время!" });
+                return Json(new { success = false, message = "Игра окончена!" });
             }
 
             var currentPlayer = gameState.Players.FirstOrDefault(p => p.Id == request.PlayerId);
-            if (currentPlayer == null || gameState.ActivePlayerId != request.PlayerId)
+            if (currentPlayer == null)
             {
-                return Json(new { success = false, message = "Сейчас не ваш ход!" });
+                return Json(new { success = false, message = "Игрок не найден!" });
             }
 
             var cell = gameState.Grid[currentPlayer.X, currentPlayer.Y];
             if (string.IsNullOrEmpty(cell.OwnerId) && request.Spend)
             {
-                if (currentPlayer.Coins >= cell.Cost)
+                if (currentPlayer.Coins < cell.Cost)
                 {
-                    currentPlayer.Coins -= cell.Cost;
-                    gameState.CurrentAttemptCost = cell.Cost;
-                    cell.IsRevealed = true;
-                    gameState.ShowTaskInput = true;
-                    gameState.TimerActive = true;
-
-                    // Передаём request.PlayerId в SendGameStateUpdate
-                    await SendGameStateUpdate(request.MatchId, gameState, request.PlayerId);
-                    return Json(new { success = true, task = cell.Task, timeLimit = 30 });
+                    return Json(new { success = false, message = "Недостаточно монет!" });
                 }
-                return Json(new { success = false, message = "Недостаточно монет!" });
+
+                lock (_gameService.Games) // Синхронизация для изменения состояния
+                {
+                    cell.IsRevealed = true;
+                }
+
+                // Вызываем SendGameStateUpdate после выхода из lock
+                await SendGameStateUpdate(request.MatchId, gameState, request.PlayerId);
+                return Json(new { success = true, task = cell.Task, timeLimit = 30 });
             }
             else
             {
-                gameState.ShowTaskInput = false;
-                gameState.TimerActive = false;
-                gameState.CurrentPlayerIndex = (gameState.CurrentPlayerIndex + 1) % gameState.Players.Count;
-                gameState.ActivePlayerId = gameState.Players[gameState.CurrentPlayerIndex].Id;
-
-                // Передаём request.PlayerId в SendGameStateUpdate
                 await SendGameStateUpdate(request.MatchId, gameState, request.PlayerId);
                 return Json(new { success = true });
             }
@@ -267,15 +270,15 @@ namespace MathInvaders.Controllers
             }
 
             var gameState = _gameService.Games[request.MatchId];
-            if (gameState.GameOver || gameState.ShowTaskInput)
+            if (gameState.GameOver)
             {
-                return Json(new { success = false, message = "Игра окончена или сейчас не время!" });
+                return Json(new { success = false, message = "Игра окончена!" });
             }
 
             var currentPlayer = gameState.Players.FirstOrDefault(p => p.Id == request.PlayerId);
-            if (currentPlayer == null || gameState.ActivePlayerId != request.PlayerId)
+            if (currentPlayer == null)
             {
-                return Json(new { success = false, message = "Сейчас не ваш ход!" });
+                return Json(new { success = false, message = "Игрок не найден!" });
             }
 
             var cell = gameState.Grid[currentPlayer.X, currentPlayer.Y];
@@ -290,19 +293,20 @@ namespace MathInvaders.Controllers
                 return Json(new { success = false, message = "Недостаточно монет!" });
             }
 
-            currentPlayer.Coins -= cost;
-            gameState.CurrentAttemptCost = cost;
-            cell.IsRevealed = true;
-            gameState.ShowTaskInput = true;
-            gameState.TimerActive = true;
-
-            if (!request.UseOriginalTask)
+            lock (_gameService.Games) // Синхронизация для изменения состояния
             {
-                var (newTask, newAnswer) = GenerateTask(cell.Difficulty + 1, gameState); // Передаём gameState
-                cell.Task = newTask;
-                cell.Answer = newAnswer;
+                currentPlayer.Coins -= cost;
+                cell.IsRevealed = true;
+
+                if (!request.UseOriginalTask)
+                {
+                    var (newTask, newAnswer) = GenerateTask(cell.Difficulty + 1, gameState);
+                    cell.Task = newTask;
+                    cell.Answer = newAnswer;
+                }
             }
 
+            // Вызываем SendGameStateUpdate после выхода из lock
             await SendGameStateUpdate(request.MatchId, gameState, request.PlayerId);
             return Json(new { success = true, task = cell.Task, timeLimit = 30 });
         }
@@ -316,45 +320,43 @@ namespace MathInvaders.Controllers
             }
 
             var gameState = _gameService.Games[request.MatchId];
-            if (gameState.GameOver || !gameState.ShowTaskInput)
+            if (gameState.GameOver)
             {
-                return Json(new { success = false, message = "Игра окончена или сейчас не время!" });
+                return Json(new { success = false, message = "Игра окончена!" });
             }
 
             var currentPlayer = gameState.Players.FirstOrDefault(p => p.Id == request.PlayerId);
-            if (currentPlayer == null || gameState.ActivePlayerId != request.PlayerId)
+            if (currentPlayer == null)
             {
-                return Json(new { success = false, message = "Сейчас не ваш ход!" });
+                return Json(new { success = false, message = "Игрок не найден!" });
             }
 
             var cell = gameState.Grid[currentPlayer.X, currentPlayer.Y];
             bool isCorrect = request.Answer == cell.Answer;
 
-            if (isCorrect)
+            lock (_gameService.Games) // Синхронизация для изменения состояния
             {
-                cell.OwnerId = currentPlayer.Id;
-                currentPlayer.CapturedCells++;
-                gameState.LastMovedCell = (currentPlayer.X, currentPlayer.Y);
-            }
-            else
-            {
-                currentPlayer.Coins += gameState.CurrentAttemptCost;
-                currentPlayer.X = gameState.LastMovedCell.Value.X;
-                currentPlayer.Y = gameState.LastMovedCell.Value.Y;
-                cell.IsRevealed = false;
-                var (newTask, newAnswer) = GenerateTask(cell.Difficulty, gameState); // Передаём gameState
-                cell.Task = newTask;
-                cell.Answer = newAnswer;
-                gameState.LastMovedCell = null;
+                if (isCorrect)
+                {
+                    cell.OwnerId = currentPlayer.Id;
+                    currentPlayer.CapturedCells++;
+                    gameState.LastMovedCell = (currentPlayer.X, currentPlayer.Y);
+                }
+                else
+                {
+                    currentPlayer.X = gameState.LastMovedCell.Value.X;
+                    currentPlayer.Y = gameState.LastMovedCell.Value.Y;
+                    cell.IsRevealed = false;
+                    var (newTask, newAnswer) = GenerateTask(cell.Difficulty, gameState);
+                    cell.Task = newTask;
+                    cell.Answer = newAnswer;
+                    gameState.LastMovedCell = null;
+                }
+
+                gameState.CheckGameOver();
             }
 
-            gameState.ShowTaskInput = false;
-            gameState.TimerActive = false;
-            gameState.CurrentAttemptCost = 0;
-            gameState.CurrentPlayerIndex = (gameState.CurrentPlayerIndex + 1) % gameState.Players.Count;
-            gameState.ActivePlayerId = gameState.Players[gameState.CurrentPlayerIndex].Id;
-            gameState.CheckGameOver();
-
+            // Вызываем SendGameStateUpdate после выхода из lock
             await SendGameStateUpdate(request.MatchId, gameState, request.PlayerId);
             return Json(new { success = true, wasCorrect = isCorrect });
         }
@@ -368,33 +370,31 @@ namespace MathInvaders.Controllers
             }
 
             var gameState = _gameService.Games[request.MatchId];
-            if (gameState.GameOver || !gameState.ShowTaskInput || !gameState.TimerActive)
+            if (gameState.GameOver)
             {
-                return Json(new { success = false, message = "Таймер не активен!" });
+                return Json(new { success = false, message = "Игра окончена!" });
             }
 
             var currentPlayer = gameState.Players.FirstOrDefault(p => p.Id == request.PlayerId);
-            if (currentPlayer == null || gameState.ActivePlayerId != request.PlayerId)
+            if (currentPlayer == null)
             {
-                return Json(new { success = false, message = "Сейчас не ваш ход!" });
+                return Json(new { success = false, message = "Игрок не найден!" });
             }
 
             var cell = gameState.Grid[currentPlayer.X, currentPlayer.Y];
-            currentPlayer.Coins += gameState.CurrentAttemptCost;
-            currentPlayer.X = gameState.LastMovedCell.Value.X;
-            currentPlayer.Y = gameState.LastMovedCell.Value.Y;
-            cell.IsRevealed = false;
-            var (newTask, newAnswer) = GenerateTask(cell.Difficulty, gameState); // Передаём gameState
-            cell.Task = newTask;
-            cell.Answer = newAnswer;
-            gameState.LastMovedCell = null;
 
-            gameState.ShowTaskInput = false;
-            gameState.TimerActive = false;
-            gameState.CurrentAttemptCost = 0;
-            gameState.CurrentPlayerIndex = (gameState.CurrentPlayerIndex + 1) % gameState.Players.Count;
-            gameState.ActivePlayerId = gameState.Players[gameState.CurrentPlayerIndex].Id;
+            lock (_gameService.Games) // Синхронизация для изменения состояния
+            {
+                currentPlayer.X = gameState.LastMovedCell.Value.X;
+                currentPlayer.Y = gameState.LastMovedCell.Value.Y;
+                cell.IsRevealed = false;
+                var (newTask, newAnswer) = GenerateTask(cell.Difficulty, gameState);
+                cell.Task = newTask;
+                cell.Answer = newAnswer;
+                gameState.LastMovedCell = null;
+            }
 
+            // Вызываем SendGameStateUpdate после выхода из lock
             await SendGameStateUpdate(request.MatchId, gameState, request.PlayerId);
             return Json(new { success = true, message = "Время вышло!" });
         }

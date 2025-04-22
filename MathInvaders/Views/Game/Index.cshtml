@@ -14,8 +14,8 @@
         <h1>Math Invaders (Матч #@Model.MatchId)</h1>
         <div class="game-container">
             <div class="player-info">
-                Текущий игрок: <strong id="playerName" data-active-player-id="@Model.ActivePlayerId">@Model.Players.FirstOrDefault(p => p.Id == Model.ActivePlayerId)?.Name</strong>
-                (Active Player ID: <span id="activePlayerId">@Model.ActivePlayerId</span>)
+                Вы: <strong id="playerName" data-player-id="@Model.PlayerId">@Model.Players.FirstOrDefault(p => p.Id == Model.PlayerId)?.Name</strong>
+                (Player ID: <span id="playerId">@Model.PlayerId</span>)
             </div>
             <div class="game-field" id="gameField">
                 <div class="grid" id="gameGrid"></div>
@@ -29,7 +29,7 @@
         </div>
 
         <!-- Модальное окно для задач -->
-        <div id="taskModal" class="modal" style="@(Model.ShowTaskInput ? "display: flex;" : "display: none;")">
+        <div id="taskModal" class="modal" style="display: none;">
             <div class="modal-content">
                 <p id="taskText"></p>
                 <input type="number" id="taskAnswer" />
@@ -56,6 +56,13 @@
         let matchId = @Model.MatchId;
         let timerInterval = null;
         let currentCaptureData = null;
+
+        // Локальное состояние задачи для текущего игрока
+        let playerTaskState = {
+            isActive: false,
+            taskText: "",
+            timeLimit: 0
+        };
 
         // Функция для преобразования ключей из camelCase в PascalCase
         function toPascalCase(obj) {
@@ -88,7 +95,6 @@
             try {
                 let parsedState = JSON.parse(gameStateJson);
                 console.log("Parsed gameState:", parsedState);
-                // Преобразуем ключи в PascalCase
                 parsedState = toPascalCase(parsedState);
                 console.log("Transformed parsedState:", parsedState);
                 console.log("gameState has required fields - gameState:", !!parsedState, "Grid:", !!parsedState?.Grid, "Players:", !!parsedState?.Players);
@@ -148,7 +154,6 @@
         function updateGameField(localGameState) {
             console.log("updateGameField called with gameState:", localGameState);
 
-            // Проверка на базовую валидность gameState
             if (!localGameState) {
                 console.error("gameState is null or undefined:", localGameState);
                 return;
@@ -162,13 +167,7 @@
                 return;
             }
 
-            // Обновляем глобальную переменную gameState только после проверки
             gameState = localGameState;
-
-            // Проверка на наличие ActivePlayerId
-            if (!gameState.ActivePlayerId) {
-                console.warn("gameState.ActivePlayerId is missing:", gameState);
-            }
 
             const grid = document.getElementById("gameGrid");
             if (!grid) {
@@ -230,13 +229,13 @@
                 cell.appendChild(playerDiv);
             });
 
-            console.log("Updating current player...");
-            const currentPlayer = gameState.Players.find(p => p.Id === gameState.ActivePlayerId);
+            console.log("Updating player info...");
+            const currentPlayer = gameState.Players.find(p => p.Id === activePlayerId);
             console.log("Current player:", currentPlayer);
             const playerNameElement = document.getElementById("playerName");
             if (playerNameElement) {
                 playerNameElement.textContent = currentPlayer ? currentPlayer.Name : "Unknown";
-                playerNameElement.setAttribute("data-active-player-id", gameState.ActivePlayerId || "");
+                playerNameElement.setAttribute("data-player-id", activePlayerId || "");
             } else {
                 console.warn("playerName element not found");
             }
@@ -280,15 +279,15 @@
                 }
             }, 100);
 
-            // Показываем модальное окно с задачей только активному игроку
+            // Показываем модальное окно на основе локального состояния игрока
             const taskModal = document.getElementById("taskModal");
-            if (gameState.ShowTaskInput && gameState.TimerActive && activePlayerId === gameState.ActivePlayerId) {
-                console.log("Showing task modal for active player:", activePlayerId);
+            if (playerTaskState.isActive) {
+                console.log("Showing task modal for player:", activePlayerId);
                 if (taskModal) {
                     taskModal.style.display = "flex";
                     const taskText = document.getElementById("taskText");
                     if (taskText) {
-                        taskText.textContent = gameState.Task || "Задача не загружена";
+                        taskText.textContent = playerTaskState.taskText || "Задача не загружена";
                     } else {
                         console.warn("taskText element not found");
                     }
@@ -304,15 +303,15 @@
                     console.warn("taskModal element not found");
                 }
             } else {
-                // Скрываем модальное окно для неактивных игроков
                 if (taskModal) {
-                    console.log("Hiding task modal for non-active player:", activePlayerId);
+                    console.log("Hiding task modal for player:", activePlayerId);
                     taskModal.style.display = "none";
                 }
             }
         }
 
         function moveToCell(newX, newY) {
+            console.log(`Attempting move for player ${activePlayerId} to position (${newX}, ${newY})`);
             fetch('/Game/Move', {
                 method: 'POST',
                 headers: {
@@ -322,8 +321,9 @@
             })
             .then(response => response.json())
             .then(data => {
+                console.log("Move response:", data);
                 if (data.success) {
-                    if (data.isoccupied) {
+                    if (data.isOccupied) {
                         currentCaptureData = data;
                         const captureModal = document.getElementById("captureModal");
                         const captureText = document.getElementById("captureText");
@@ -337,6 +337,7 @@
                     }
                 } else {
                     console.error("Move failed:", data.message);
+                    alert("Не удалось сделать ход: " + data.message);
                 }
             })
             .catch(err => console.error("Move error:", err));
@@ -349,6 +350,7 @@
         }
 
         function spendCoins(cost) {
+            console.log(`Spending coins for player ${activePlayerId}, cost: ${cost}`);
             fetch('/Game/SpendCoins', {
                 method: 'POST',
                 headers: {
@@ -358,8 +360,14 @@
             })
             .then(response => response.json())
             .then(data => {
+                console.log("SpendCoins response:", data);
                 if (data.success) {
                     if (data.task) {
+                        // Обновляем локальное состояние задачи
+                        playerTaskState.isActive = true;
+                        playerTaskState.taskText = data.task;
+                        playerTaskState.timeLimit = data.timeLimit;
+
                         const taskModal = document.getElementById("taskModal");
                         taskModal.style.display = "flex";
                         document.getElementById("taskText").textContent = data.task;
@@ -373,6 +381,7 @@
                             timeLeft--;
                             if (timeLeft < 0) {
                                 clearInterval(timerInterval);
+                                playerTaskState.isActive = false;
                                 taskModal.style.display = "none";
                                 const modalContent = taskModal.querySelector('.modal-content');
                                 modalContent.classList.add('timeout');
@@ -382,12 +391,14 @@
                     }
                 } else {
                     console.error("SpendCoins failed:", data.message);
+                    alert("Не удалось потратить монеты: " + data.message);
                 }
             })
             .catch(err => console.error("SpendCoins error:", err));
         }
 
         function captureCell(useOriginalTask) {
+            console.log(`Capturing cell for player ${activePlayerId}, useOriginalTask: ${useOriginalTask}`);
             fetch('/Game/CaptureCell', {
                 method: 'POST',
                 headers: {
@@ -397,7 +408,13 @@
             })
             .then(response => response.json())
             .then(data => {
+                console.log("CaptureCell response:", data);
                 if (data.success) {
+                    // Обновляем локальное состояние задачи
+                    playerTaskState.isActive = true;
+                    playerTaskState.taskText = data.task;
+                    playerTaskState.timeLimit = data.timeLimit;
+
                     const taskModal = document.getElementById("taskModal");
                     taskModal.style.display = "flex";
                     document.getElementById("taskText").textContent = data.task;
@@ -411,6 +428,7 @@
                         timeLeft--;
                         if (timeLeft < 0) {
                             clearInterval(timerInterval);
+                            playerTaskState.isActive = false;
                             taskModal.style.display = "none";
                             const modalContent = taskModal.querySelector('.modal-content');
                             modalContent.classList.add('timeout');
@@ -419,6 +437,7 @@
                     }, 1000);
                 } else {
                     console.error("CaptureCell failed:", data.message);
+                    alert("Не удалось захватить клетку: " + data.message);
                 }
             })
             .catch(err => console.error("CaptureCell error:", err));
@@ -426,6 +445,7 @@
 
         function submitAnswer() {
             const answer = parseInt(document.getElementById("taskAnswer").value) || -1;
+            console.log(`Submitting answer for player ${activePlayerId}, answer: ${answer}`);
             fetch('/Game/SubmitAnswer', {
                 method: 'POST',
                 headers: {
@@ -435,9 +455,11 @@
             })
             .then(response => response.json())
             .then(data => {
+                console.log("SubmitAnswer response:", data);
                 if (data.success) {
                     clearInterval(timerInterval);
                     const taskModal = document.getElementById("taskModal");
+                    playerTaskState.isActive = false;
                     if (!data.wasCorrect) {
                         const modalContent = taskModal.querySelector('.modal-content');
                         modalContent.classList.add('wrong');
@@ -454,12 +476,14 @@
                     }
                 } else {
                     console.error("SubmitAnswer failed:", data.message);
+                    alert("Не удалось отправить ответ: " + data.message);
                 }
             })
             .catch(err => console.error("SubmitAnswer error:", err));
         }
 
         function timeout() {
+            console.log(`Timeout for player ${activePlayerId}`);
             fetch('/Game/Timeout', {
                 method: 'POST',
                 headers: {
@@ -469,12 +493,15 @@
             })
             .then(response => response.json())
             .then(data => {
+                console.log("Timeout response:", data);
                 if (data.success) {
                     clearInterval(timerInterval);
+                    playerTaskState.isActive = false;
                     document.getElementById("taskModal").style.display = "none";
                     document.getElementById("taskAnswer").value = "";
                 } else {
                     console.error("Timeout failed:", data.message);
+                    alert("Таймаут не сработал: " + data.message);
                 }
             })
             .catch(err => console.error("Timeout error:", err));
