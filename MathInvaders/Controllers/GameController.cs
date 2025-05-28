@@ -334,7 +334,7 @@ namespace MathInvaders.Controllers
             var cell = gameState.Grid[currentPlayer.X, currentPlayer.Y];
             bool isCorrect = request.Answer == cell.Answer;
 
-            lock (_gameService.Games) // Синхронизация для изменения состояния
+            lock (_gameService.Games) 
             {
                 if (isCorrect)
                 {
@@ -356,7 +356,6 @@ namespace MathInvaders.Controllers
                 gameState.CheckGameOver();
             }
 
-            // Вызываем SendGameStateUpdate после выхода из lock
             await SendGameStateUpdate(request.MatchId, gameState, request.PlayerId);
             return Json(new { success = true, wasCorrect = isCorrect });
         }
@@ -383,7 +382,7 @@ namespace MathInvaders.Controllers
 
             var cell = gameState.Grid[currentPlayer.X, currentPlayer.Y];
 
-            lock (_gameService.Games) // Синхронизация для изменения состояния
+            lock (_gameService.Games)
             {
                 currentPlayer.X = gameState.LastMovedCell.Value.X;
                 currentPlayer.Y = gameState.LastMovedCell.Value.Y;
@@ -394,7 +393,6 @@ namespace MathInvaders.Controllers
                 gameState.LastMovedCell = null;
             }
 
-            // Вызываем SendGameStateUpdate после выхода из lock
             await SendGameStateUpdate(request.MatchId, gameState, request.PlayerId);
             return Json(new { success = true, message = "Время вышло!" });
         }
