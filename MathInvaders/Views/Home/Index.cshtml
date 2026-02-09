@@ -1,66 +1,354 @@
-﻿@{
+﻿@model MathInvaders.Models.HomeViewModel
+@{
     ViewData["Title"] = "Math Invaders - Главная";
 }
+
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <title>Math Invaders</title>
-    <link rel="stylesheet" href="~/css/site.css" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
     <style>
-        .header {
+        .navbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 10px 20px;
+            background-color: #1a1a2e;
+            color: white;
         }
 
-        .auth-buttons {
-            margin-right: 20px;
+        .navbar-brand a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.5em;
+            font-weight: bold;
         }
 
-            .auth-buttons a {
-                margin-left: 10px;
+        .navbar-links {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+            .navbar-links a {
+                color: white;
                 text-decoration: none;
-                padding: 5px 10px;
-                border: 1px solid #e94560;
-                border-radius: 5px;
-                color: #e94560;
             }
 
-                .auth-buttons a:hover {
-                    background-color: #e94560;
-                    color: white;
+                .navbar-links a:hover {
+                    color: #e94560;
                 }
+
+        .nav-button {
+            padding: 5px 10px;
+            background-color: #e94560;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+            .nav-button:hover {
+                background-color: #ff6f61;
+            }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+        }
+
+        .main-content {
+            padding: 20px;
+            text-align: center;
+        }
+
+        .welcome-text {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+
+        .game-start {
+            margin-top: 20px;
+        }
+
+        .class-select {
+            padding: 5px;
+            margin-right: 10px;
+        }
+
+        .start-button {
+            padding: 10px 20px;
+            background-color: #e94560;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+            .start-button:hover {
+                background-color: #ff6f61;
+            }
+
+        .game-rules {
+            margin: 20px 0;
+            text-align: left;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            background-color: #2a2a3e;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 3px solid #e94560;
+            color: white;
+        }
+
+            .game-rules ul {
+                margin-top: 0;
+                padding-left: 20px;
+                list-style-type: disc;
+            }
+
+            .game-rules li {
+                margin-bottom: 10px;
+            }
+
+        .footer {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #1a1a2e;
+            color: white;
+            text-align: center;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Math Invaders</h1>
-            <div class="auth-buttons">
-                @if (User.Identity.IsAuthenticated)
-                {
-                    <span>Привет, @User.Identity.Name!</span>
-                    <form asp-controller="Account" asp-action="Logout" method="post" style="display: inline;">
-                        <button type="submit" style="margin-left: 10px;">Выйти</button>
-                    </form>
-                }
-                else
-                {
-                    <a asp-controller="Account" asp-action="Login">Вход</a>
-                    <a asp-controller="Account" asp-action="Register">Регистрация</a>
-                }
+    <header>
+        <nav class="navbar">
+            <div class="navbar-brand">
+                <a asp-controller="Home" asp-action="Index">Math Invaders</a>
             </div>
+            <div class="navbar-links">
+                <a asp-controller="Home" asp-action="Index">Home</a>
+                <a asp-controller="Home" asp-action="Privacy">Privacy</a>
+                <div id="authSection">
+                    <a class="nav-button" asp-controller="Account" asp-action="Login">Вход</a>
+                    <a class="nav-button" asp-controller="Account" asp-action="Register">Регистрация</a>
+                </div>
+                <div id="userSection" class="user-info" style="display: none;">
+                    <span id="userName"></span>
+                    <button class="nav-button" onclick="logout()">Выход</button>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="main-content">
+        <h1 class="game-header"></h1>
+        <p class="welcome-text">Добро пожаловать в математическую игру на захват территории!</p>
+
+        <!-- Правила игры -->
+        <div class="game-rules">
+            <h3>Правила игры "Захватчики"</h3>
+            <ul>
+                <li><strong>Цель игры:</strong> Захватить как можно больше клеток</li>
+                <li><strong>Игровое поле:</strong> Таблица с клетками 5x5. Каждая клетка содержит задачу.</li>
+                <li><strong>Управление:</strong> Используйте курсор мыши и нажимайте на нужное вам поле. Ходить можно только на соседние клетки. Вводите ответ в текстовое поле и нажимайте Enter.</li>
+                <li><strong>Механика захвата:</strong> Правильный ответ окрашивает клетку в ваш цвет. Неверный ответ или истечение времени не дает вам захватить поле. Также игроки могут захватывать чужие клетки. При захвате клеток у игрока два выбора: 1) захватить поле с такой же задачей, но она будет стоить в два раза дороже 2) захватить это поле с таким же количеством монет, но задача будет сложнее.
+                    Игроки, могут вернуть свои утраченные поля. Стоимость клеток зависит от их сложности. Легкая: 1 монета, Средняя: 2 монеты, Сложная: 3 монеты.
+                </li>
+                <li><strong>Монеты и время:</strong> Начальное количество монет - 10. Если монеты исчерпается, то у игрока кончаются ходы. На задачу даётся 30 секунд.</li>
+                <li><strong>Победа и поражение:</strong> Победа — наибольшее количество захваченных клеток. Поражение — в других случаях.</li>
+            </ul>
         </div>
-        <p>Добро пожаловать в математическую игру на захват территорий!</p>
-        <form asp-controller="Game" asp-action="StartGame" method="post">
+
+        <div class="game-start">
             <label for="classLevel">Выберите класс:</label>
-            <select name="classLevel" id="classLevel">
+            <select id="classLevel" name="classLevel" class="class-select">
                 <option value="5">5 класс</option>
                 <option value="6">6 класс</option>
                 <option value="7">7 класс</option>
             </select>
-            <input type="submit" value="Начать игру" />
-        </form>
-    </div>
+            <button id="playButton" class="start-button">Играть</button>
+        </div>
+
+        <div id="lobby" style="display: none;">
+            <h2>Ожидание игроков...</h2>
+            <div id="playersList"></div>
+            <button id="readyButton" class="start-button">Готов</button>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>© @DateTime.Now.Year - Math Invaders</p>
+    </footer>
+
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/gameHub")
+            .configureLogging(signalR.LogLevel.Information)
+            .build();
+
+        let matchId = null;
+        let playerId = null;
+        let isReady = false;
+        let currentUser = null;
+
+        // Загрузка данных пользователя из localStorage и проверка TempData
+        window.onload = function() {
+            console.log("Page loaded, checking for currentUser in localStorage...");
+            const user = localStorage.getItem('currentUser');
+            if (user) {
+                currentUser = JSON.parse(user);
+                document.getElementById('authSection').style.display = 'none';
+                document.getElementById('userSection').style.display = 'flex';
+                document.getElementById('userName').textContent = `Привет, ${currentUser.name}!`;
+                console.log("User loaded from localStorage:", currentUser);
+            } else {
+                console.log("No user found in localStorage");
+                // Проверяем TempData для данных после входа
+                const userName = '@TempData["UserName"]';
+                const userEmail = '@TempData["UserEmail"]';
+                if (userName && userEmail && userName !== '') {
+                    currentUser = { name: userName, email: userEmail };
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    document.getElementById('authSection').style.display = 'none';
+                    document.getElementById('userSection').style.display = 'flex';
+                    document.getElementById('userName').textContent = `Привет, ${currentUser.name}!`;
+                    console.log("User loaded from TempData:", currentUser);
+                }
+            }
+        };
+
+        function logout() {
+            console.log("logout called");
+            currentUser = null;
+            localStorage.removeItem('currentUser');
+            document.getElementById('authSection').style.display = 'flex';
+            document.getElementById('userSection').style.display = 'none';
+        }
+
+        // SignalR handlers и логика игры
+        connection.on("PlayerJoined", (joinedPlayerId) => {
+            console.log(`Player ${joinedPlayerId} joined the match!`);
+            updatePlayersList();
+        });
+
+        connection.on("PlayerReadyStatus", (readyPlayerId, readyStatus) => {
+            console.log(`Player ${readyPlayerId} is ${readyStatus ? "ready" : "not ready"}`);
+            updatePlayersList();
+            checkAllReady();
+        });
+
+        connection.on("ReceiveGameState", (gameStateJson) => {
+            console.log("Received game state update:", gameStateJson);
+        });
+
+        document.getElementById("playButton").addEventListener("click", () => {
+            const classLevel = document.getElementById("classLevel").value;
+            console.log("Creating match with classLevel:", classLevel);
+            fetch('/Game/CreateMatch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ classLevel: parseInt(classLevel), playerName: currentUser ? currentUser.name : 'Guest' })
+            })
+            .then(response => {
+                console.log("CreateMatch response:", response);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("CreateMatch data:", data);
+                if (data.success) {
+                    matchId = data.matchId;
+                    playerId = data.playerId;
+                    console.log("Starting SignalR connection...");
+                    connection.start()
+                        .then(() => {
+                            console.log("SignalR connected");
+                            connection.invoke("JoinGame", matchId.toString(), playerId.toString())
+                                .then(() => {
+                                    console.log(`Joined game: matchId=${matchId}, playerId=${playerId}`);
+                                    document.querySelector(".game-start").style.display = "none";
+                                    document.getElementById("lobby").style.display = "block";
+                                    updatePlayersList();
+                                })
+                                .catch(err => console.error("Error joining game:", err));
+                        })
+                        .catch(err => {
+                            console.error("SignalR connection error:", err);
+                            alert("Не удалось подключиться к серверу: " + err.message);
+                        });
+                } else {
+                    alert('Не удалось создать матч: ' + data.message);
+                }
+            })
+            .catch(err => {
+                console.error("Error creating match:", err);
+                alert("Произошла ошибка при создании матча: " + err.message);
+            });
+        });
+
+        document.getElementById("readyButton").addEventListener("click", () => {
+            isReady = !isReady;
+            document.getElementById("readyButton").textContent = isReady ? "Не готов" : "Готов";
+            console.log(`PlayerReady: ${playerId} is ${isReady ? "ready" : "not ready"}`);
+            connection.invoke("PlayerReady", matchId.toString(), playerId.toString(), isReady)
+                .then(() => console.log(`PlayerReady invoked: ${playerId} is ${isReady ? "ready" : "not ready"}`))
+                .catch(err => console.error("Error invoking PlayerReady:", err));
+        });
+
+        function updatePlayersList() {
+            if (!matchId) {
+                console.warn("matchId is not defined, cannot update players list");
+                return;
+            }
+            fetch(`/Game/GetMatchPlayers?matchId=${matchId}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Players list received:", data);
+                    const playersList = document.getElementById("playersList");
+                    playersList.innerHTML = "";
+                    data.players.forEach(player => {
+                        const playerInfo = document.createElement("p");
+                        playerInfo.textContent = `Игрок ${player.id}: ${player.isReady ? "Готов" : "Не готов"}`;
+                        playersList.appendChild(playerInfo);
+                    });
+                })
+                .catch(err => console.error("Error updating players list:", err));
+        }
+
+        function checkAllReady() {
+            if (!matchId) {
+                console.warn("matchId is not defined, cannot check ready status");
+                return;
+            }
+            fetch(`/Game/CheckAllReady?matchId=${matchId}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log("CheckAllReady result:", data);
+                    if (data.allReady) {
+                        console.log(`All players are ready, redirecting to /Game/Index?matchId=${matchId}&playerId=${playerId}`);
+                        window.location.href = `/Game/Index?matchId=${matchId}&playerId=${playerId}`;
+                    } else {
+                        console.log("Not all players are ready yet.");
+                    }
+                })
+                .catch(err => console.error("Error checking ready status:", err));
+        }
+    </script>
 </body>
 </html>

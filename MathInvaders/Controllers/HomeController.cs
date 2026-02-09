@@ -13,9 +13,17 @@ namespace MathInvaders.Controllers
             _logger = logger;
         }
 
+        //public IActionResult Index()
+        //{
+        //    return View(new HomeViewModel());
+        //}
         public IActionResult Index()
         {
-            return View();
+            var model = new HomeViewModel
+            {
+                PlayerId = HttpContext.Session.GetString("PlayerId") ?? ""
+            };
+            return View(model);
         }
 
         public IActionResult Privacy()

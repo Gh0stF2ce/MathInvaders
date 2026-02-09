@@ -1,106 +1,91 @@
-﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+﻿using MathInvaders.Models;
+using MathInvaders.Services;
 using Microsoft.AspNetCore.Mvc;
-using Npgsql;
-using System.Security.Claims;
-using System.Threading.Tasks;
+using System;
 
 namespace MathInvaders.Controllers
 {
     public class AccountController : Controller
     {
-        private readonly string _connectionString;
+        private readonly UserService _userService;
 
-        public AccountController(IConfiguration configuration)
+        public AccountController(UserService userService)
         {
-            _connectionString = configuration.GetConnectionString("PostgresDB");
-            if (string.IsNullOrEmpty(_connectionString))
-            {
-                throw new InvalidOperationException("Строка подключения 'PostgresDB' не найдена в конфигурации.");
-            }
+            _userService = userService;
         }
 
         [HttpGet]
         public IActionResult Register()
         {
-            return View();
+            return View(new RegisterViewModel());
         }
 
         [HttpPost]
-        public async Task<IActionResult> Register(string username, string password)
+        public IActionResult Register(RegisterViewModel model)
         {
-            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            if (!ModelState.IsValid)
             {
-                ViewBag.Error = "Введите имя пользователя и пароль.";
-                return View();
+                return View(model);
             }
 
-            using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-
-            var checkCmd = new NpgsqlCommand("SELECT COUNT(*) FROM users WHERE username = @username", conn);
-            checkCmd.Parameters.AddWithValue("username", username);
-            var exists = (long)await checkCmd.ExecuteScalarAsync() > 0;
-
-            if (exists)
+            try
             {
-                ViewBag.Error = "Пользователь с таким именем уже существует.";
-                return View();
+                var user = _userService.Register(model.Name, model.Email, model.Password);
+                return RedirectToAction("Login", "Account");
             }
-
-            var cmd = new NpgsqlCommand("INSERT INTO users (username, password) VALUES (@username, @password)", conn);
-            cmd.Parameters.AddWithValue("username", username);
-            cmd.Parameters.AddWithValue("password", password);
-            await cmd.ExecuteNonQueryAsync();
-
-            var claims = new[] { new Claim(ClaimTypes.Name, username) };
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
-
-            return RedirectToAction("Index", "Home");
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("уже существует"))
+                {
+                    ViewData["ErrorMessage"] = "Пользователь с таким email уже зарегистрирован.";
+                }
+                else
+                {
+                    ViewData["ErrorMessage"] = "Произошла ошибка при регистрации: " + ex.Message;
+                }
+                return View(model);
+            }
         }
 
         [HttpGet]
         public IActionResult Login()
         {
-            return View();
+            return View(new LoginViewModel());
         }
 
         [HttpPost]
-        public async Task<IActionResult> Login(string username, string password)
+        public IActionResult Login(LoginViewModel model)
         {
-            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            if (!ModelState.IsValid)
             {
-                ViewBag.Error = "Введите имя пользователя и пароль.";
-                return View();
+                return View(model);
             }
 
-            using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-
-            var cmd = new NpgsqlCommand("SELECT COUNT(*) FROM users WHERE username = @username AND password = @password", conn);
-            cmd.Parameters.AddWithValue("username", username);
-            cmd.Parameters.AddWithValue("password", password);
-            var exists = (long)await cmd.ExecuteScalarAsync() > 0;
-
-            if (!exists)
+            try
             {
-                ViewBag.Error = "Неверное имя пользователя или пароль.";
-                return View();
+                var user = _userService.Login(model.Email, model.Password);
+                TempData["UserName"] = user.Name;
+                TempData["UserEmail"] = user.Email;
+                return RedirectToAction("Index", "Home");
             }
-
-            var claims = new[] { new Claim(ClaimTypes.Name, username) };
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
-
-            return RedirectToAction("Index", "Home");
+            catch (Exception ex)
+            {
+                ViewData["ErrorMessage"] = ex.Message;
+                return View(model);
+            }
         }
+    }
 
-        [HttpPost]
-        public async Task<IActionResult> Logout()
-        {
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Index", "Home");
-        }
+    public class RegisterRequest
+    {
+        public string Name { get; set; }
+        public string Email { get; set; }
+        public string Password { get; set; }
+    }
+
+    public class LoginRequest
+    {
+        public string Email { get; set; }
+        public string Password { get; set; }
     }
 }

@@ -1,58 +1,28 @@
-using Infrastructure;
-using MathInvaders.Data;
-using MathInvaders.Infrastructure.Database;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Npgsql.EntityFrameworkCore.PostgreSQL;
+using MathInvaders.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddInfrastructure();
-
-//var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ??
-//    "Host=localhost;Database=mathinvaders_db; Username=postgres;Password=postgres";
-//builder.Services.AddDbContext<ApplicationDbContext>(options =>
-//    options.UseNpgsql(connectionString));
-
-//builder.Services.AddIdentity<IdentityUser, IdentityRole>(options => options.SignIn.RequireConfirmedAccount = false)
-//    .AddEntityFrameworkStores<ApplicationDbContext>()
-//    .AddDefaultTokenProviders();
-
-// Add services to the container.
+// Добавляем сервисы
 builder.Services.AddControllersWithViews();
+builder.Services.AddSignalR();
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
 
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.LoginPath = "/Account/Login";
-        options.LogoutPath = "/Account/Logout";
-    });
+// Регистрируем GameService как singleton
+builder.Services.AddSingleton<GameService>();
+builder.Services.AddSingleton<UserService>();
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-{
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    logger.LogInformation("Запуск миграций...");
-    try
-    {
-        var migrationRunner = scope.ServiceProvider.GetRequiredService<MigrationRunner>();
-        migrationRunner.Run();
-        logger.LogInformation("Миграции успешно выполнены.");
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Ошибка при выполнении миграций.");
-        throw; // Для отладки
-    }
-}
-
-// Configure the HTTP request pipeline.
+// Настраиваем middleware
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aaka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
@@ -61,7 +31,10 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseSession();
 app.UseAuthorization();
+
+app.MapHub<MathInvaders.Hubs.GameHub>("/gameHub");
 
 app.MapControllerRoute(
     name: "default",
